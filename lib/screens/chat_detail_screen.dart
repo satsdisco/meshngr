@@ -8,6 +8,7 @@ import '../widgets/message_bubble.dart';
 import '../widgets/contact_avatar.dart';
 import '../widgets/signal_indicator.dart';
 import '../widgets/route_mode_picker.dart';
+import '../widgets/date_header.dart';
 import '../models/broadcast.dart';
 
 class ChatDetailScreen extends StatefulWidget {
@@ -24,6 +25,20 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final _scrollController = ScrollController();
   RouteMode _routeMode = RouteMode.auto;
   bool _showRoutePicker = false;
+  bool _showScrollToBottom = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(() {
+      if (!_scrollController.hasClients) return;
+      final atBottom = _scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 100;
+      if (_showScrollToBottom == atBottom) {
+        setState(() => _showScrollToBottom = !atBottom);
+      }
+    });
+  }
 
   void _sendMessage() {
     final text = _controller.text.trim();
@@ -122,17 +137,61 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     ),
                   );
                 }
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) => MessageBubble(
-                    message: messages[index],
-                    onRetry: messages[index].status == DeliveryStatus.failed
-                        ? () => context.read<ChatProvider>().retryMessage(
-                              widget.contact.id, messages[index].id)
-                        : null,
-                  ),
+                return Stack(
+                  children: [
+                    ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: messages.length,
+                      itemBuilder: (context, index) {
+                        final msg = messages[index];
+                        final prevMsg = index > 0 ? messages[index - 1] : null;
+
+                        // Show date header if day changed
+                        final showDate = prevMsg == null ||
+                            msg.timestamp.day != prevMsg.timestamp.day ||
+                            msg.timestamp.month != prevMsg.timestamp.month;
+
+                        // Collapse timestamps if same sender within 2 min
+                        final isGrouped = prevMsg != null &&
+                            prevMsg.isMe == msg.isMe &&
+                            msg.timestamp.difference(prevMsg.timestamp).inMinutes < 2;
+
+                        return Column(
+                          children: [
+                            if (showDate) DateHeader(date: msg.timestamp),
+                            Padding(
+                              padding: EdgeInsets.only(top: isGrouped ? 0 : 4),
+                              child: MessageBubble(
+                                message: msg,
+                                onRetry: msg.status == DeliveryStatus.failed
+                                    ? () => context.read<ChatProvider>().retryMessage(
+                                          widget.contact.id, msg.id)
+                                    : null,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                    // Scroll to bottom FAB
+                    if (_showScrollToBottom)
+                      Positioned(
+                        right: 16,
+                        bottom: 8,
+                        child: FloatingActionButton.small(
+                          onPressed: () {
+                            _scrollController.animateTo(
+                              _scrollController.position.maxScrollExtent,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeOut,
+                            );
+                          },
+                          backgroundColor: AppColors.surface,
+                          child: const Icon(Icons.keyboard_arrow_down, color: AppColors.textSecondary),
+                        ),
+                      ),
+                  ],
                 );
               },
             ),

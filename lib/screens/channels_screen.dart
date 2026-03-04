@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../providers/chat_provider.dart';
+import 'channel_chat_screen.dart';
 
 class ChannelsScreen extends StatelessWidget {
   const ChannelsScreen({super.key});
@@ -37,7 +38,7 @@ class ChannelsScreen extends StatelessWidget {
               ...joined.map((channel) => _ChannelTile(
                 channel: channel,
                 timeLabel: _formatTime(channel.lastMessageTime),
-                onTap: () {},
+                onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => ChannelChatScreen(channel: channel))); },
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -101,7 +102,7 @@ class ChannelsScreen extends StatelessWidget {
               ...available.map((channel) => _ChannelTile(
                 channel: channel,
                 timeLabel: _formatTime(channel.lastMessageTime),
-                onTap: () {},
+                onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => ChannelChatScreen(channel: channel))); },
                 trailing: FilledButton.tonal(
                   onPressed: () => cp.joinChannel(channel.id),
                   style: FilledButton.styleFrom(

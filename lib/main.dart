@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import 'theme/app_theme.dart';
 import 'providers/chat_provider.dart';
 import 'providers/connection_provider.dart';
-import 'screens/home_screen.dart';
+import 'screens/onboarding_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,7 +32,9 @@ class MeshngrApp extends StatelessWidget {
         title: 'meshngr',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.dark,
-        home: const HomeScreen(),
+        // TODO: check SharedPreferences for onboarding_complete flag
+        // For now, always show onboarding (change to HomeScreen to skip)
+        home: const OnboardingScreen(),
       ),
     );
   }
