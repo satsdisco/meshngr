@@ -2,6 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+	</array>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>meshngr uses Bluetooth to connect to your MeshCore radio for off-grid messaging.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>meshngr uses Bluetooth to connect to your MeshCore radio for off-grid messaging.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
