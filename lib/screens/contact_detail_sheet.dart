@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../models/contact.dart';
 import '../providers/chat_provider.dart';
+import '../widgets/contact_avatar.dart';
 import '../widgets/signal_indicator.dart';
 
 class ContactDetailSheet extends StatelessWidget {
@@ -32,38 +33,7 @@ class ContactDetailSheet extends StatelessWidget {
           const SizedBox(height: 24),
 
           // Avatar
-          Stack(
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: const BoxDecoration(
-                  color: AppColors.surfaceLight,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    contact.initials,
-                    style: const TextStyle(color: AppColors.accent, fontWeight: FontWeight.w700, fontSize: 26),
-                  ),
-                ),
-              ),
-              if (contact.isOnline)
-                Positioned(
-                  right: 2,
-                  bottom: 2,
-                  child: Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: AppColors.online,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.surface, width: 3),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+          ContactAvatar(contact: contact, size: 72),
           const SizedBox(height: 16),
 
           // Name

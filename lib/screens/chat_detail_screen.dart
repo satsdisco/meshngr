@@ -5,6 +5,7 @@ import '../models/contact.dart';
 import '../models/message.dart';
 import '../providers/chat_provider.dart';
 import '../widgets/message_bubble.dart';
+import '../widgets/contact_avatar.dart';
 import '../widgets/signal_indicator.dart';
 
 class ChatDetailScreen extends StatefulWidget {
@@ -50,31 +51,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         titleSpacing: 0,
         title: Row(
           children: [
-            // Avatar
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: AppColors.surfaceLight,
-                shape: BoxShape.circle,
-                border: widget.contact.isOnline
-                    ? Border.all(color: AppColors.success, width: 1.5)
-                    : null,
-              ),
-              child: Center(
-                child: Text(
-                  widget.contact.initials,
-                  style: const TextStyle(color: AppColors.accent, fontWeight: FontWeight.w600, fontSize: 13),
-                ),
-              ),
-            ),
+            ContactAvatar(contact: widget.contact, size: 36),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    widget.contact.name,
+                    widget.contact.displayName,
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                   Row(
