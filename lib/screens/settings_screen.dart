@@ -4,6 +4,7 @@ import '../theme/app_theme.dart';
 import '../providers/connection_provider.dart' as conn;
 import '../widgets/connection_status.dart';
 import 'connection_screen.dart';
+import 'broadcast_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -24,6 +25,14 @@ class SettingsScreen extends StatelessWidget {
                 subtitle: cp.statusText,
                 leading: ConnectionStatusDot(state: cp.state),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ConnectionScreen())),
+                trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 20),
+              ),
+
+              _SettingsTile(
+                icon: Icons.cell_tower,
+                title: 'Broadcast',
+                subtitle: 'Make yourself visible on the mesh',
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BroadcastScreen())),
                 trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 20),
               ),
 

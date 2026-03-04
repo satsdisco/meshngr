@@ -7,6 +7,8 @@ import '../providers/chat_provider.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/contact_avatar.dart';
 import '../widgets/signal_indicator.dart';
+import '../widgets/route_mode_picker.dart';
+import '../models/broadcast.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final Contact contact;
@@ -20,6 +22,8 @@ class ChatDetailScreen extends StatefulWidget {
 class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
+  RouteMode _routeMode = RouteMode.auto;
+  bool _showRoutePicker = false;
 
   void _sendMessage() {
     final text = _controller.text.trim();
@@ -133,20 +137,50 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               },
             ),
           ),
+          // Route mode picker (expandable)
+          if (_showRoutePicker)
+            RouteModePicker(
+              selected: _routeMode,
+              onChanged: (mode) => setState(() {
+                _routeMode = mode;
+                _showRoutePicker = false;
+              }),
+            ),
           // Input bar
           Container(
             padding: EdgeInsets.only(
-              left: 12,
+              left: 6,
               right: 8,
               top: 8,
               bottom: MediaQuery.of(context).padding.bottom + 8,
             ),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppColors.surface,
-              border: Border(top: BorderSide(color: AppColors.divider, width: 0.5)),
+              border: _showRoutePicker ? null : const Border(top: BorderSide(color: AppColors.divider, width: 0.5)),
             ),
             child: Row(
               children: [
+                // Route mode toggle
+                GestureDetector(
+                  onTap: () => setState(() => _showRoutePicker = !_showRoutePicker),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: _showRoutePicker
+                          ? AppColors.accent.withValues(alpha: 0.15)
+                          : AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Center(
+                      child: Text(
+                        _routeMode.icon,
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14),
