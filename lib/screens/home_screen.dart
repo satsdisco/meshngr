@@ -11,6 +11,8 @@ import 'settings_screen.dart';
 import 'nearby_sheet.dart';
 import 'add_channel_screen.dart';
 import 'share_contact_screen.dart';
+import 'add_contact_screen.dart';
+import 'qr_scan_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -32,6 +34,55 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _showAddContactOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Add Contact', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.qr_code_scanner, color: AppColors.accent),
+              title: const Text('Scan QR Code'),
+              subtitle: const Text('Scan someone\'s QR code nearby'),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const QrScanScreen()));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.key, color: AppColors.accent),
+              title: const Text('Paste Public Key'),
+              subtitle: const Text('Add someone far away by their key'),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const AddContactScreen()));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.radar, color: AppColors.accent),
+              title: const Text('Scan Nearby'),
+              subtitle: const Text('Find nodes broadcasting right now'),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showNearbySheet();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showNearbySheet() {
@@ -101,8 +152,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           if (_tabController.index == 1) {
             // Channels tab → Add Channel
             Navigator.push(context, MaterialPageRoute(builder: (_) => const AddChannelScreen()));
+          } else if (_tabController.index == 2) {
+            // Contacts tab → Add contact options
+            _showAddContactOptions();
           } else {
-            // Messages/Contacts → Nearby sheet
+            // Messages → Nearby sheet
             _showNearbySheet();
           }
         },

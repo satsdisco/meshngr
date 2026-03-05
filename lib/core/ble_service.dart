@@ -237,6 +237,12 @@ class BleService extends ChangeNotifier {
     await sendFrame(buildSendSelfAdvertFrame(flood: flood));
   }
 
+  /// Add a contact by public key
+  Future<void> addContactByKey(String pubKeyHex, {String name = ''}) async {
+    _log('Adding contact by key: ${pubKeyHex.substring(0, 12)}... name="$name"');
+    await sendFrame(buildAddUpdateContactFrame(pubKeyHex, name: name));
+  }
+
   /// Set display name on the radio
   Future<void> setName(String name) async {
     await sendFrame(buildSetAdvertNameFrame(name));

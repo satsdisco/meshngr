@@ -11,6 +11,7 @@ import '../core/protocol.dart';
 
 class ChatProvider extends ChangeNotifier {
   final BleService _ble;
+  BleService get ble => _ble;
 
   // My Contacts — people the USER explicitly saved/named
   List<Contact> _myContacts = [];
