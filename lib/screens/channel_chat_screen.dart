@@ -540,20 +540,47 @@ class _ChannelBubble extends StatelessWidget {
             const SizedBox(height: 4),
             Align(
               alignment: Alignment.centerRight,
-              child: Text(
-                formatTime(message.timestamp),
-                style: TextStyle(
-                  color: message.isMe
-                      ? Colors.white.withValues(alpha: 0.6)
-                      : AppColors.textTertiary,
-                  fontSize: 11,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    formatTime(message.timestamp),
+                    style: TextStyle(
+                      color: message.isMe
+                          ? Colors.white.withValues(alpha: 0.6)
+                          : AppColors.textTertiary,
+                      fontSize: 11,
+                    ),
+                  ),
+                  if (message.isMe) ...[
+                    const SizedBox(width: 4),
+                    _deliveryIcon(message.status),
+                  ],
+                ],
               ),
             ),
           ],
         ),
       ),
     );
+  }
+}
+
+Widget _deliveryIcon(DeliveryStatus status) {
+  switch (status) {
+    case DeliveryStatus.pending:
+      return SizedBox(
+        width: 12, height: 12,
+        child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white.withValues(alpha: 0.5)),
+      );
+    case DeliveryStatus.sent:
+      return Icon(Icons.check, size: 14, color: Colors.white.withValues(alpha: 0.7));
+    case DeliveryStatus.delivered:
+      return Icon(Icons.done_all, size: 14, color: Colors.white.withValues(alpha: 0.7));
+    case DeliveryStatus.read:
+      return const Icon(Icons.done_all, size: 14, color: AppColors.accent);
+    case DeliveryStatus.failed:
+      return Icon(Icons.error_outline, size: 14, color: Colors.red.shade300);
   }
 }
 

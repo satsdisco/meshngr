@@ -55,10 +55,10 @@ class ShareContactScreen extends StatelessWidget {
           // Use the standard MeshCore QR format for cross-app compatibility
           final qrData = 'meshcore://contact/add?name=${Uri.encodeComponent(name)}&public_key=$pubKeyHex&type=1';
 
-          return SingleChildScrollView(
+          return Center(
+            child: SingleChildScrollView(
             padding: const EdgeInsets.all(32),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const SizedBox(height: 20),
                 // Avatar
@@ -140,6 +140,7 @@ class ShareContactScreen extends StatelessWidget {
                 ),
               ],
             ),
+          ),
           );
         },
       ),
