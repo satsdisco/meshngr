@@ -85,7 +85,8 @@ class ShareContactScreen extends StatelessWidget {
                 const SizedBox(height: 32),
 
                 // QR Code
-                Container(
+                UnconstrainedBox(
+                  child: Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -99,6 +100,7 @@ class ShareContactScreen extends StatelessWidget {
                     eyeStyle: const QrEyeStyle(color: Colors.black, eyeShape: QrEyeShape.square),
                     dataModuleStyle: const QrDataModuleStyle(color: Colors.black, dataModuleShape: QrDataModuleShape.square),
                   ),
+                ),
                 ),
                 const SizedBox(height: 24),
 
