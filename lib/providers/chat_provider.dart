@@ -931,6 +931,12 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearKnownNodes() {
+    _knownNodes.clear();
+    notifyListeners();
+    // They'll repopulate on next contact sync from radio
+  }
+
   Future<void> clearAllData() async {
     final db = await _db;
     await db.deleteAll();

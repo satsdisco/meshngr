@@ -161,7 +161,35 @@ class _ContactsScreenState extends State<ContactsScreen> {
                               ...knownOnline.map((c) => _SwipeableContactRow(contact: c, isKnownNode: true)),
                             ],
                             if (knownOffline.isNotEmpty) ...[
-                              _SectionHeader(title: 'KNOWN NODES', count: knownOffline.length),
+                              Row(
+                                children: [
+                                  Expanded(child: _SectionHeader(title: 'KNOWN NODES', count: knownOffline.length)),
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 16),
+                                    child: TextButton.icon(
+                                      onPressed: () async {
+                                        final confirmed = await showDialog<bool>(
+                                          context: context,
+                                          builder: (ctx) => AlertDialog(
+                                            title: const Text('Clear Known Nodes?'),
+                                            content: const Text('Removes all known nodes. They\'ll repopulate as your radio hears them again.'),
+                                            actions: [
+                                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                                              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear')),
+                                            ],
+                                          ),
+                                        );
+                                        if (confirmed == true && context.mounted) {
+                                          context.read<ChatProvider>().clearKnownNodes();
+                                        }
+                                      },
+                                      icon: const Icon(Icons.refresh, size: 14),
+                                      label: const Text('Clear', style: TextStyle(fontSize: 12)),
+                                      style: TextButton.styleFrom(foregroundColor: AppColors.textTertiary),
+                                    ),
+                                  ),
+                                ],
+                              ),
                               ...knownOffline.map((c) => _SwipeableContactRow(contact: c, isKnownNode: true)),
                             ],
                           ],

@@ -661,12 +661,20 @@ ParsedFrame _parseChannelMsg(BufferReader r, int code) {
 }
 
 ParsedFrame _parseBattStorage(BufferReader r, int code) {
+  // Format: [battery_mv uint16 LE][storage_used_kb uint32 LE][storage_total_kb uint32 LE]
   if (r.remaining < 2) return ParsedFrame(code);
-  final batt = r.readUInt8();
-  final storage = r.readUInt8();
+  final battMv = r.readUInt16LE();
+  // Convert millivolts to percentage (Li-ion curve: 3.0V=0%, 4.2V=100%)
+  final pct = ((battMv - 3000) / 12.0).clamp(0, 100).round();
+  int storageFree = 0;
+  if (r.remaining >= 8) {
+    final usedKb = r.readUInt32LE();
+    final totalKb = r.readUInt32LE();
+    storageFree = totalKb > 0 ? ((totalKb - usedKb) * 100 ~/ totalKb) : 0;
+  }
   return ParsedFrame(code, DeviceBattStorage(
-    batteryPercent: batt,
-    storageFreePercent: storage,
+    batteryPercent: pct,
+    storageFreePercent: storageFree,
   ));
 }
 
