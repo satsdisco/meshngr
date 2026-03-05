@@ -90,6 +90,24 @@ class ChannelsScreen extends StatelessWidget {
                       onSelected: (action) {
                         if (action == 'mute') cp.toggleMuteChannel(channel.id);
                         if (action == 'leave') cp.leaveChannel(channel.id);
+                        if (action == 'remove') {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              backgroundColor: AppColors.surface,
+                              title: Text('Remove #${channel.name}?'),
+                              content: const Text('This will clear the channel slot on your radio. You can re-add it later.'),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                                FilledButton(
+                                  onPressed: () { Navigator.pop(ctx); cp.removeChannel(channel.id); },
+                                  style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+                                  child: const Text('Remove'),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
                       },
                       itemBuilder: (_) => [
                         PopupMenuItem(
@@ -112,6 +130,16 @@ class ChannelsScreen extends StatelessWidget {
                             ],
                           ),
                         ),
+                        const PopupMenuItem(
+                          value: 'remove',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline, size: 18, color: AppColors.error),
+                              SizedBox(width: 8),
+                              Text('Remove from radio', style: TextStyle(color: AppColors.error)),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -119,14 +147,21 @@ class ChannelsScreen extends StatelessWidget {
               )),
             ],
 
-            // Available channels
+            // Discovered channels (received messages but not explicitly joined)
             if (available.isNotEmpty) ...[
               if (joined.isNotEmpty) const SizedBox(height: 8),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                 child: Text(
-                  'AVAILABLE',
+                  'OTHER ACTIVITY',
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(letterSpacing: 1.2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  'Channels your radio picked up. Join to participate.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textTertiary, fontSize: 11),
                 ),
               ),
               ...available.map((channel) => _ChannelTile(

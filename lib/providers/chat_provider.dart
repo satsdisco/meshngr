@@ -232,10 +232,11 @@ class ChatProvider extends ChangeNotifier {
     String channelId = _radioChannelMap[cm.channelIdx] ?? 'ch_radio_${cm.channelIdx}';
 
     if (!_channels.any((c) => c.id == channelId)) {
+      // Auto-created channel from incoming message — NOT explicitly joined
       final newChannel = Channel(
         id: channelId,
         name: 'Channel ${cm.channelIdx}',
-        isJoined: true,
+        isJoined: false, // Not joined by user — discovered via incoming msg
         memberCount: 0,
       );
       _channels.add(newChannel);
@@ -667,7 +668,10 @@ class ChatProvider extends ChangeNotifier {
       isMe: true,
       senderName: 'You',
       senderColor: 0xFF4A9EFF,
-      status: DeliveryStatus.delivered,
+      // Channels are broadcast — start as pending, move to sent after BLE transmit
+      // No delivery confirmation exists for channel messages
+      status: _ble.isConnected ? DeliveryStatus.pending : DeliveryStatus.failed,
+      failReason: _ble.isConnected ? null : 'Radio not connected',
     );
     _channelConversations.putIfAbsent(channelId, () => []);
     _channelConversations[channelId]!.add(msg);
@@ -687,6 +691,19 @@ class ChatProvider extends ChangeNotifier {
     if (_ble.isConnected) {
       final radioIdx = _getRadioChannelIdx(channelId);
       _ble.sendChannelMessage(radioIdx, text);
+      // Channel messages are broadcast — mark as sent (no delivery ACK possible)
+      Future.delayed(const Duration(milliseconds: 300), () {
+        final msgs = _channelConversations[channelId];
+        if (msgs == null) return;
+        final msgIdx = msgs.indexWhere((m) => m.id == msg.id);
+        if (msgIdx != -1 && msgs[msgIdx].status == DeliveryStatus.pending) {
+          _channelConversations[channelId]![msgIdx] = msgs[msgIdx].copyWith(
+            status: DeliveryStatus.sent,
+          );
+          notifyListeners();
+          _db.then((db) => db.upsertMessage(_channelConversations[channelId]![msgIdx], channelId: channelId));
+        }
+      });
     }
   }
 
