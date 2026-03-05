@@ -41,7 +41,7 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
             const SizedBox(height: 4),
             Text(
               node != null
-                  ? (node.advType == 1 ? 'Companion Radio · ${node.lastSeenText}' : 'Repeater / Infrastructure')
+                  ? (node.advType <= 1 ? 'Companion Radio · ${node.lastSeenText}' : 'Repeater / Infrastructure')
                   : 'Seen in ${widget.channel.name}',
               style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
             ),
@@ -70,7 +70,7 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
                   icon: const Icon(Icons.person_add, size: 18),
                   label: const Text('Save Contact'),
                 ),
-                if (node != null && node.advType == 1)
+                if (node != null && node.advType <= 1)
                   OutlinedButton.icon(
                     onPressed: () {
                       final saved = node.copyWith(trustLevel: TrustLevel.saved);

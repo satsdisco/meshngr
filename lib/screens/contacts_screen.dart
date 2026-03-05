@@ -158,8 +158,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
                               const SizedBox(height: 8),
                               _CollapsibleNodesSection(
                                 totalCount: knownFiltered.length,
-                                repeaterCount: knownFiltered.where((c) => c.advType != 1).length,
-                                personCount: knownFiltered.where((c) => c.advType == 1).length,
+                                repeaterCount: knownFiltered.where((c) => c.advType >= 2).length,
+                                personCount: knownFiltered.where((c) => c.advType <= 1).length,
                                 onlineNodes: knownOnline,
                                 offlineNodes: knownOffline,
                                 onClear: () async {
@@ -545,21 +545,14 @@ class _CollapsibleNodesSectionState extends State<_CollapsibleNodesSection> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${widget.personCount} 👤 people · ${widget.repeaterCount} 📡 repeaters',
+                          widget.repeaterCount > 0
+                              ? '${widget.personCount} 👤 people · ${widget.repeaterCount} 📡 repeaters'
+                              : 'Nodes your radio has heard on the mesh',
                           style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
                         ),
                       ],
                     ),
                   ),
-                  if (_expanded)
-                    TextButton(
-                      onPressed: widget.onClear,
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.textTertiary,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                      ),
-                      child: const Text('Clear', style: TextStyle(fontSize: 12)),
-                    ),
                   Icon(
                     _expanded ? Icons.expand_less : Icons.expand_more,
                     color: AppColors.textTertiary,
@@ -588,7 +581,7 @@ class _NodeRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isRepeater = contact.advType != 1;
+    final isRepeater = contact.advType >= 2;
     return ListTile(
       dense: true,
       leading: Stack(
@@ -633,7 +626,7 @@ class _NodeDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isRepeater = contact.advType != 1;
+    final isRepeater = contact.advType >= 2;
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
