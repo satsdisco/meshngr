@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import '../providers/connection_provider.dart' as conn;
+import '../core/ble_service.dart';
 
 class ConnectionStatusDot extends StatelessWidget {
-  final conn.ConnectionState state;
+  final BleConnectionState state;
   final double size;
 
   const ConnectionStatusDot({super.key, required this.state, this.size = 8});
@@ -12,14 +12,14 @@ class ConnectionStatusDot extends StatelessWidget {
   Widget build(BuildContext context) {
     Color color;
     switch (state) {
-      case conn.ConnectionState.connected:
+      case BleConnectionState.connected:
         color = AppColors.success;
         break;
-      case conn.ConnectionState.connecting:
-      case conn.ConnectionState.scanning:
+      case BleConnectionState.connecting:
+      case BleConnectionState.scanning:
         color = AppColors.warning;
         break;
-      case conn.ConnectionState.disconnected:
+      case BleConnectionState.disconnected:
         color = AppColors.error;
         break;
     }

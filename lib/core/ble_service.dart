@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'protocol.dart';
@@ -22,19 +21,22 @@ class BleService extends ChangeNotifier {
   List<ScanResult> _scanResults = [];
   bool _manualDisconnect = false;
 
-  // Frame accumulator (MeshCore can split frames across BLE packets)
-  final _frameBuffer = BytesBuilder();
-
   // Stream of parsed frames from the radio
   final _frameController = StreamController<ParsedFrame>.broadcast();
 
+  // Cached device info
+  DeviceSelfInfo? _selfInfo;
+  DeviceBattStorage? _battInfo;
+
   // Public API
   BleConnectionState get state => _state;
-  String? get deviceName => _deviceName;
+  String? get deviceName => _selfInfo?.name ?? _deviceName;
   String? get deviceId => _deviceId;
   bool get isConnected => _state == BleConnectionState.connected;
   List<ScanResult> get scanResults => _scanResults;
   Stream<ParsedFrame> get frames => _frameController.stream;
+  DeviceSelfInfo? get selfInfo => _selfInfo;
+  int? get batteryPercent => _battInfo?.batteryPercent;
 
   /// Start scanning for MeshCore radios
   Future<void> startScan({Duration timeout = const Duration(seconds: 10)}) async {
@@ -222,6 +224,17 @@ class BleService extends ChangeNotifier {
     final frame = Uint8List.fromList(data);
     try {
       final parsed = parseFrame(frame);
+
+      // Cache device-level info
+      if (parsed.code == Resp.selfInfo && parsed.data is DeviceSelfInfo) {
+        _selfInfo = parsed.data as DeviceSelfInfo;
+        notifyListeners();
+      }
+      if (parsed.code == Resp.battAndStorage && parsed.data is DeviceBattStorage) {
+        _battInfo = parsed.data as DeviceBattStorage;
+        notifyListeners();
+      }
+
       _frameController.add(parsed);
 
       // If there are messages waiting, sync them
@@ -235,6 +248,8 @@ class BleService extends ChangeNotifier {
 
   void _handleDisconnection() {
     debugPrint('BLE: Device disconnected');
+    _selfInfo = null;
+    _battInfo = null;
     _cleanup();
     _setState(BleConnectionState.disconnected);
 

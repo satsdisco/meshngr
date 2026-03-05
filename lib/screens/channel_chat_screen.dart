@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/channel.dart';
-import '../models/message.dart';
 
 class ChannelChatScreen extends StatefulWidget {
   final Channel channel;

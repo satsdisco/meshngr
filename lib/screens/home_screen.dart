@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../providers/chat_provider.dart';
-import '../providers/connection_provider.dart' as conn;
+import '../core/ble_service.dart';
 import '../widgets/connection_status.dart';
 import 'chats_screen.dart';
 import 'channels_screen.dart';
@@ -48,9 +48,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         title: const Text('meshngr'),
         leading: Padding(
           padding: const EdgeInsets.only(left: 12),
-          child: Consumer<conn.ConnectionProvider>(
-            builder: (context, cp, _) => Center(
-              child: ConnectionStatusDot(state: cp.state, size: 10),
+          child: Consumer<BleService>(
+            builder: (context, ble, _) => Center(
+              child: ConnectionStatusDot(state: ble.state, size: 10),
             ),
           ),
         ),

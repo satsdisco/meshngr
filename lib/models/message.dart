@@ -28,6 +28,8 @@ class Message {
   final MessageRoute? route;
   final String? failReason;
   final int retryCount;
+  final String? senderName;  // For channel messages: display name of sender
+  final int? senderColor;    // For channel messages: ARGB color int for sender name
 
   const Message({
     required this.id,
@@ -39,6 +41,8 @@ class Message {
     this.route,
     this.failReason,
     this.retryCount = 0,
+    this.senderName,
+    this.senderColor,
   });
 
   // Compat getters
@@ -49,6 +53,8 @@ class Message {
     MessageRoute? route,
     String? failReason,
     int? retryCount,
+    String? senderName,
+    int? senderColor,
   }) {
     return Message(
       id: id,
@@ -60,6 +66,8 @@ class Message {
       route: route ?? this.route,
       failReason: failReason ?? this.failReason,
       retryCount: retryCount ?? this.retryCount,
+      senderName: senderName ?? this.senderName,
+      senderColor: senderColor ?? this.senderColor,
     );
   }
 }

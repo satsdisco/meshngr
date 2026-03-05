@@ -3,11 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'theme/app_theme.dart';
+import 'core/ble_service.dart';
 import 'providers/chat_provider.dart';
-import 'providers/connection_provider.dart';
 import 'screens/onboarding_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -15,25 +15,35 @@ void main() {
       statusBarIconBrightness: Brightness.light,
     ),
   );
-  runApp(const MeshngrApp());
+
+  final bleService = BleService();
+  final chatProvider = ChatProvider(bleService);
+  await chatProvider.initialize();
+
+  runApp(MeshngrApp(bleService: bleService, chatProvider: chatProvider));
 }
 
 class MeshngrApp extends StatelessWidget {
-  const MeshngrApp({super.key});
+  final BleService bleService;
+  final ChatProvider chatProvider;
+
+  const MeshngrApp({
+    super.key,
+    required this.bleService,
+    required this.chatProvider,
+  });
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => ChatProvider()),
-        ChangeNotifierProvider(create: (_) => ConnectionProvider()),
+        ChangeNotifierProvider.value(value: bleService),
+        ChangeNotifierProvider.value(value: chatProvider),
       ],
       child: MaterialApp(
         title: 'meshngr',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.dark,
-        // TODO: check SharedPreferences for onboarding_complete flag
-        // For now, always show onboarding (change to HomeScreen to skip)
         home: const OnboardingScreen(),
       ),
     );

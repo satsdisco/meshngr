@@ -206,6 +206,23 @@ Uint8List buildRebootFrame() {
   return Uint8List.fromList([Cmd.reboot]);
 }
 
+/// Add or update a contact on the radio by public key
+/// [pubKeyHex] — 64-char hex string (32 bytes)
+/// [name] — device name as reported by the node
+/// [advType] — advert type (default: chat)
+Uint8List buildAddUpdateContactFrame(String pubKeyHex, {String name = '', int advType = AdvType.chat}) {
+  final w = BufferWriter();
+  w.writeByte(Cmd.addUpdateContact);
+  w.writeHex(pubKeyHex);
+  w.writeByte(advType);
+  w.writeByte(0); // flags
+  w.writeByte(0); // pathLen = 0 (flood route)
+  w.writeByte(0); // SNR = 0
+  w.writeUInt32LE(DateTime.now().millisecondsSinceEpoch ~/ 1000);
+  if (name.isNotEmpty) w.writeCString(name, maxNameSize);
+  return w.toBytes();
+}
+
 // ─── Response parsers ────────────────────────────────────────
 
 /// Parsed contact from device
@@ -512,7 +529,6 @@ ParsedFrame _parseAdvert(BufferReader r, int code) {
 
   int advType = AdvType.chat;
   String name = '';
-  double? lat, lon;
 
   if (r.remaining >= 4) {
     r.readInt32LE(); // timestamp
@@ -525,8 +541,7 @@ ParsedFrame _parseAdvert(BufferReader r, int code) {
     advType = (flags >> 2) & 0x07;
 
     if (hasLocation && r.remaining >= 8) {
-      lat = r.readInt32LE() / 1e6;
-      lon = r.readInt32LE() / 1e6;
+      r.skipBytes(8); // lat/lon (future use)
     }
     if (hasName && r.remaining > 0) {
       name = r.readString();
