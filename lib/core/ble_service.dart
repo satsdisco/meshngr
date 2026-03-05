@@ -140,20 +140,29 @@ class BleService extends ChangeNotifier {
 
       _setState(BleConnectionState.connected);
 
-      // Send app start handshake
+      // Match reference app init sequence:
+      // 1. deviceQuery (triggers selfInfo response)
+      // 2. appStart (handshake with app name + version)
+      await sendFrame(buildDeviceQueryFrame());
       await sendFrame(buildAppStartFrame());
 
-      // Sync time
+      // 3. Request battery info
+      await sendFrame(buildGetBattAndStorageFrame());
+
+      // 4. Wait for selfInfo to arrive before proceeding
+      await Future.delayed(const Duration(seconds: 2));
+
+      // 5. Sync time
       await sendFrame(buildSetDeviceTimeFrame());
 
-      // Request contacts
-      await sendFrame(buildGetContactsFrame());
-
-      // Request channels (slots 0-7)
+      // 6. Request channels (slots 0-7)
       for (int i = 0; i < 8; i++) {
         await sendFrame(buildGetChannelFrame(i));
         await Future.delayed(const Duration(milliseconds: 100));
       }
+
+      // 7. Request contacts (after selfInfo + channels are loaded)
+      await sendFrame(buildGetContactsFrame());
 
     } catch (e) {
       debugPrint('BLE connect error: $e');
@@ -183,7 +192,10 @@ class BleService extends ChangeNotifier {
       return;
     }
     try {
-      await _rxChar!.write(frame.toList(), withoutResponse: false);
+      debugPrint('BLE TX: code=${frame[0]} len=${frame.length}');
+      // Prefer writeWithoutResponse when supported (matches reference app)
+      final canWriteWithout = _rxChar!.properties.writeWithoutResponse;
+      await _rxChar!.write(frame.toList(), withoutResponse: canWriteWithout);
     } catch (e) {
       debugPrint('BLE send error: $e');
     }
@@ -243,6 +255,7 @@ class BleService extends ChangeNotifier {
 
     // Parse the frame
     final frame = Uint8List.fromList(data);
+    debugPrint('BLE RX: code=${frame[0]} len=${frame.length}');
     try {
       final parsed = parseFrame(frame);
 

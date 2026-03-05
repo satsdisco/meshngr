@@ -94,6 +94,12 @@ const int appProtocolVersion = 3;
 
 // ─── Frame builders ──────────────────────────────────────────
 
+/// Device query — triggers selfInfo response
+/// Format: [cmd][app_version]
+Uint8List buildDeviceQueryFrame() {
+  return Uint8List.fromList([Cmd.deviceQuery, appProtocolVersion]);
+}
+
 /// App start handshake — sent after BLE connect
 /// Format: [cmd][app_ver][reserved x6][app_name...]\0
 Uint8List buildAppStartFrame() {
