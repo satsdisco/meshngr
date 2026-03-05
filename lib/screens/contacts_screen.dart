@@ -33,13 +33,21 @@ class _ContactsScreenState extends State<ContactsScreen> {
   Widget build(BuildContext context) {
     return Consumer<ChatProvider>(
       builder: (context, cp, _) {
-        final allContacts = _filterContacts(cp.savedContacts);
-        final favorites = allContacts.where((c) => c.trustLevel == TrustLevel.favorite).toList()
+        final myFiltered = _filterContacts(cp.myContacts);
+        final knownFiltered = _filterContacts(cp.knownNodes);
+        final favorites = myFiltered.where((c) => c.trustLevel == TrustLevel.favorite).toList()
           ..sort((a, b) => a.displayName.compareTo(b.displayName));
-        final online = allContacts.where((c) => c.isOnline && c.trustLevel != TrustLevel.favorite).toList()
+        final myOnline = myFiltered.where((c) => c.isOnline && c.trustLevel != TrustLevel.favorite).toList()
           ..sort((a, b) => a.displayName.compareTo(b.displayName));
-        final offline = allContacts.where((c) => !c.isOnline && c.trustLevel != TrustLevel.favorite).toList()
+        final myOffline = myFiltered.where((c) => !c.isOnline && c.trustLevel != TrustLevel.favorite).toList()
           ..sort((a, b) => a.displayName.compareTo(b.displayName));
+        final knownOnline = knownFiltered.where((c) => c.isOnline).toList()
+          ..sort((a, b) => a.displayName.compareTo(b.displayName));
+        final knownOffline = knownFiltered.where((c) => !c.isOnline).toList()
+          ..sort((a, b) => a.displayName.compareTo(b.displayName));
+
+        final hasMyContacts = favorites.isNotEmpty || myOnline.isNotEmpty || myOffline.isNotEmpty;
+        final hasKnownNodes = knownOnline.isNotEmpty || knownOffline.isNotEmpty;
 
         return Column(
           children: [
@@ -59,7 +67,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                   }),
                   style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
                   decoration: InputDecoration(
-                    hintText: 'Search contacts...',
+                    hintText: 'Search contacts & nodes...',
                     hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 14),
                     prefixIcon: const Icon(Icons.search, color: AppColors.textTertiary, size: 20),
                     suffixIcon: _isSearching
@@ -84,7 +92,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
               child: Row(
                 children: [
                   Text(
-                    '${cp.savedContacts.length} contacts',
+                    '${cp.myContacts.length} saved · ${cp.knownNodes.length} known',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const Spacer(),
@@ -98,24 +106,63 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
             // Contact list
             Expanded(
-              child: cp.savedContacts.isEmpty
+              child: !hasMyContacts && !hasKnownNodes
                   ? _EmptyState()
-                  : allContacts.isEmpty
+                  : _isSearching && !hasMyContacts && !hasKnownNodes
                       ? _NoResults(query: _searchQuery)
                       : ListView(
                           padding: const EdgeInsets.only(bottom: 80),
                           children: [
+                            // MY CONTACTS section
                             if (favorites.isNotEmpty) ...[
                               _SectionHeader(title: 'FAVORITES', count: favorites.length, icon: Icons.star_rounded, iconColor: AppColors.warning),
                               ...favorites.map((c) => _SwipeableContactRow(contact: c)),
                             ],
-                            if (online.isNotEmpty) ...[
-                              _SectionHeader(title: 'ONLINE', count: online.length, icon: Icons.circle, iconColor: AppColors.online, iconSize: 8),
-                              ...online.map((c) => _SwipeableContactRow(contact: c)),
+                            if (myOnline.isNotEmpty) ...[
+                              _SectionHeader(title: 'MY CONTACTS · ONLINE', count: myOnline.length, icon: Icons.circle, iconColor: AppColors.online, iconSize: 8),
+                              ...myOnline.map((c) => _SwipeableContactRow(contact: c)),
                             ],
-                            if (offline.isNotEmpty) ...[
-                              _SectionHeader(title: 'OFFLINE', count: offline.length),
-                              ...offline.map((c) => _SwipeableContactRow(contact: c)),
+                            if (myOffline.isNotEmpty) ...[
+                              _SectionHeader(title: 'MY CONTACTS · OFFLINE', count: myOffline.length),
+                              ...myOffline.map((c) => _SwipeableContactRow(contact: c)),
+                            ],
+
+                            // KNOWN NODES section (from radio)
+                            if (hasKnownNodes) ...[
+                              const SizedBox(height: 8),
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                                child: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accent.withValues(alpha: 0.06),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: AppColors.accent.withValues(alpha: 0.15)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.info_outline, size: 14, color: AppColors.accent.withValues(alpha: 0.7)),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Nodes from your radio. Tap to save as a contact.',
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            color: AppColors.accent.withValues(alpha: 0.8),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                            if (knownOnline.isNotEmpty) ...[
+                              _SectionHeader(title: 'KNOWN NODES · ONLINE', count: knownOnline.length, icon: Icons.circle, iconColor: AppColors.online, iconSize: 8),
+                              ...knownOnline.map((c) => _SwipeableContactRow(contact: c, isKnownNode: true)),
+                            ],
+                            if (knownOffline.isNotEmpty) ...[
+                              _SectionHeader(title: 'KNOWN NODES', count: knownOffline.length),
+                              ...knownOffline.map((c) => _SwipeableContactRow(contact: c, isKnownNode: true)),
                             ],
                           ],
                         ),
@@ -244,7 +291,8 @@ class _SectionHeader extends StatelessWidget {
 
 class _SwipeableContactRow extends StatelessWidget {
   final Contact contact;
-  const _SwipeableContactRow({required this.contact});
+  final bool isKnownNode;
+  const _SwipeableContactRow({required this.contact, this.isKnownNode = false});
 
   @override
   Widget build(BuildContext context) {
@@ -253,17 +301,26 @@ class _SwipeableContactRow extends StatelessWidget {
       background: Container(
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.only(left: 20),
-        color: AppColors.warning.withValues(alpha: 0.2),
+        color: isKnownNode
+            ? AppColors.accent.withValues(alpha: 0.2)
+            : AppColors.warning.withValues(alpha: 0.2),
         child: Row(
           children: [
             Icon(
-              contact.trustLevel == TrustLevel.favorite ? Icons.star_outline : Icons.star_rounded,
-              color: AppColors.warning,
+              isKnownNode
+                  ? Icons.person_add_alt_1
+                  : (contact.trustLevel == TrustLevel.favorite ? Icons.star_outline : Icons.star_rounded),
+              color: isKnownNode ? AppColors.accent : AppColors.warning,
             ),
             const SizedBox(width: 8),
             Text(
-              contact.trustLevel == TrustLevel.favorite ? 'Unfavorite' : 'Favorite',
-              style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w600),
+              isKnownNode
+                  ? 'Save Contact'
+                  : (contact.trustLevel == TrustLevel.favorite ? 'Unfavorite' : 'Favorite'),
+              style: TextStyle(
+                color: isKnownNode ? AppColors.accent : AppColors.warning,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),
@@ -283,8 +340,16 @@ class _SwipeableContactRow extends StatelessWidget {
       ),
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
-          // Favorite toggle — don't actually dismiss
-          context.read<ChatProvider>().toggleFavorite(contact.id);
+          if (isKnownNode) {
+            // Save as contact
+            context.read<ChatProvider>().addContact(contact);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('${contact.displayName} saved to contacts')),
+            );
+          } else {
+            // Favorite toggle
+            context.read<ChatProvider>().toggleFavorite(contact.id);
+          }
           return false;
         } else {
           // Remove — confirm first

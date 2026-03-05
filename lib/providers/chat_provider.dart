@@ -12,14 +12,20 @@ import '../core/protocol.dart';
 class ChatProvider extends ChangeNotifier {
   final BleService _ble;
 
-  List<Contact> _savedContacts = [];
+  // My Contacts — people the USER explicitly saved/named
+  List<Contact> _myContacts = [];
+  // Known Nodes — everything from the radio's contact list (not explicitly saved)
+  List<Contact> _knownNodes = [];
+  // Nearby Now — nodes actively broadcasting
   final List<Contact> _nearbyNodes = [];
+
   List<Channel> _channels = [];
   final Map<String, List<Message>> _conversations = {};
   final Map<String, List<Message>> _channelConversations = {};
   final Map<String, bool> _typingContacts = {};
   bool _isScanning = false;
   bool _demoMode = false;
+  bool _contactsSynced = false;
 
   bool get demoMode => _demoMode;
 
@@ -72,10 +78,16 @@ class ChatProvider extends ChangeNotifier {
         break;
 
       case Resp.endOfContacts:
-        // Contacts fully synced; request battery info and start message sync
+        _contactsSynced = true;
         _ble.requestBatteryInfo();
         _ble.syncNextMessage();
         notifyListeners();
+        break;
+
+      case Resp.channelInfo:
+        if (frame.data is DeviceChannel) {
+          _handleChannelInfo(frame.data as DeviceChannel);
+        }
         break;
 
       case Resp.contactMsgRecv:
@@ -117,50 +129,51 @@ class ChatProvider extends ChangeNotifier {
     final keyHex = dc.publicKeyHex;
     if (keyHex.isEmpty) return;
 
-    // Check if already a saved contact (match by address = pubKeyHex)
-    final savedIdx = _savedContacts.indexWhere((c) => c.address == keyHex);
-    if (savedIdx != -1) {
-      // Update signal/online/hop info; preserve alias and trust level
-      final existing = _savedContacts[savedIdx];
-      final snrBars = _snrToBars(dc.lastSNR);
-      _savedContacts[savedIdx] = existing.copyWith(
+    final snrBars = _snrToBars(dc.lastSNR);
+    final isOnline = dc.lastSeen != null &&
+        DateTime.now().millisecondsSinceEpoch ~/ 1000 - dc.lastSeen! < 600;
+    final lastSeen = dc.lastSeen != null
+        ? DateTime.fromMillisecondsSinceEpoch(dc.lastSeen! * 1000)
+        : DateTime.now();
+
+    // Check if user already explicitly saved this contact
+    final myIdx = _myContacts.indexWhere((c) => c.address == keyHex);
+    if (myIdx != -1) {
+      // Update signal/online info, preserve user's alias and trust level
+      final existing = _myContacts[myIdx];
+      _myContacts[myIdx] = existing.copyWith(
         signalStrength: snrBars,
         hopCount: dc.path.length,
-        isOnline: dc.lastSeen != null &&
-            DateTime.now().millisecondsSinceEpoch ~/ 1000 - dc.lastSeen! < 600,
-        lastSeen: dc.lastSeen != null
-            ? DateTime.fromMillisecondsSinceEpoch(dc.lastSeen! * 1000)
-            : existing.lastSeen,
+        isOnline: isOnline,
+        lastSeen: lastSeen,
       );
-      _db.then((db) => db.updateContact(_savedContacts[savedIdx]));
+      _db.then((db) => db.updateContact(_myContacts[myIdx]));
       notifyListeners();
       return;
     }
-
-    // Check nearby nodes
-    final nearbyIdx = _nearbyNodes.indexWhere((c) => c.address == keyHex);
 
     final contact = Contact(
       id: keyHex,
       name: dc.name.isNotEmpty ? dc.name : 'Node-${keyHex.substring(0, 6)}',
       address: keyHex,
-      trustLevel: fromRadioList ? TrustLevel.saved : TrustLevel.unknown,
-      lastSeen: dc.lastSeen != null
-          ? DateTime.fromMillisecondsSinceEpoch(dc.lastSeen! * 1000)
-          : DateTime.now(),
-      signalStrength: _snrToBars(dc.lastSNR),
+      trustLevel: TrustLevel.unknown,
+      lastSeen: lastSeen,
+      signalStrength: snrBars,
       hopCount: dc.path.length,
-      isOnline: dc.lastSeen != null &&
-          DateTime.now().millisecondsSinceEpoch ~/ 1000 - dc.lastSeen! < 600,
+      isOnline: isOnline,
     );
 
     if (fromRadioList) {
-      // Radio saved contact — add to savedContacts
-      if (nearbyIdx != -1) _nearbyNodes.removeAt(nearbyIdx);
-      _savedContacts.add(contact);
-      _db.then((db) => db.insertContact(contact));
+      // From radio's contact list → Known Nodes (not My Contacts)
+      final knownIdx = _knownNodes.indexWhere((c) => c.address == keyHex);
+      if (knownIdx != -1) {
+        _knownNodes[knownIdx] = contact;
+      } else {
+        _knownNodes.add(contact);
+      }
     } else {
-      // Advert/nearby node
+      // Advert/nearby broadcast → Nearby Now
+      final nearbyIdx = _nearbyNodes.indexWhere((c) => c.address == keyHex);
       if (nearbyIdx != -1) {
         _nearbyNodes[nearbyIdx] = contact;
       } else {
@@ -173,8 +186,9 @@ class ChatProvider extends ChangeNotifier {
   void _handleIncomingDM(IncomingMessage im) {
     final senderKey = im.senderKeyHex;
 
-    // Find or create contact
-    Contact? contact = _savedContacts.where((c) => c.address == senderKey).firstOrNull;
+    // Find contact in myContacts first, then knownNodes
+    Contact? contact = _myContacts.where((c) => c.address == senderKey).firstOrNull;
+    contact ??= _knownNodes.where((c) => c.address == senderKey).firstOrNull;
     if (contact == null) {
       contact = Contact(
         id: senderKey,
@@ -184,8 +198,7 @@ class ChatProvider extends ChangeNotifier {
         trustLevel: TrustLevel.unknown,
         isOnline: true,
       );
-      _savedContacts.add(contact);
-      _db.then((db) => db.insertContact(contact!));
+      _knownNodes.add(contact);
     }
 
     final conversationId = contact.id;
@@ -263,9 +276,40 @@ class ChatProvider extends ChangeNotifier {
     _db.then((db) => db.upsertMessage(msg, channelId: channelId));
   }
 
+  void _handleChannelInfo(DeviceChannel dc) {
+    // Skip empty/unnamed channels
+    if (dc.name.isEmpty || dc.name.trim().isEmpty) return;
+    // Skip channels named "Channel N" with all-zero keys (empty slots)
+    final isEmptyKey = dc.key.every((b) => b == 0);
+    if (isEmptyKey && dc.name.startsWith('Channel ')) return;
+
+    final channelId = 'radio_ch_${dc.index}';
+    _radioChannelMap[dc.index] = channelId;
+
+    final existing = _channels.indexWhere((c) => c.id == channelId);
+    final channel = Channel(
+      id: channelId,
+      name: dc.name,
+      isJoined: true, // Radio channels are always "joined"
+      memberCount: 0,
+    );
+
+    if (existing != -1) {
+      _channels[existing] = channel.copyWith(
+        lastMessage: _channels[existing].lastMessage,
+        lastMessageTime: _channels[existing].lastMessageTime,
+        unreadCount: _channels[existing].unreadCount,
+      );
+    } else {
+      _channels.add(channel);
+    }
+    _db.then((db) => db.insertChannel(channel));
+    notifyListeners();
+  }
+
   void _handleAdvert(DeviceContact dc) {
     // Don't show adverts for already-saved contacts in nearby
-    final alreadySaved = _savedContacts.any((c) => c.address == dc.publicKeyHex);
+    final alreadySaved = _myContacts.any((c) => c.address == dc.publicKeyHex);
     if (alreadySaved) {
       _mergeDeviceContact(dc, fromRadioList: false);
       return;
@@ -277,8 +321,9 @@ class ChatProvider extends ChangeNotifier {
     final messageId = _pendingByAddress[recipientKeyHex];
     if (messageId == null) return;
 
-    // Find the conversation with this contact
-    final contact = _savedContacts.where((c) => c.address == recipientKeyHex).firstOrNull;
+    // Find the conversation with this contact (check both lists)
+    Contact? contact = _myContacts.where((c) => c.address == recipientKeyHex).firstOrNull;
+    contact ??= _knownNodes.where((c) => c.address == recipientKeyHex).firstOrNull;
     final convId = contact?.id ?? recipientKeyHex;
 
     final msgs = _conversations[convId];
@@ -303,13 +348,19 @@ class ChatProvider extends ChangeNotifier {
 
   // ── Contacts ──────────────────────────────────────────────────────────────
 
-  List<Contact> get savedContacts => _savedContacts;
+  /// User's explicitly saved contacts
+  List<Contact> get myContacts => _myContacts;
+  /// All contacts from the radio's stored list (not explicitly saved by user)
+  List<Contact> get knownNodes => _knownNodes;
+  /// Combined for backward compat — searches both lists
+  List<Contact> get savedContacts => [..._myContacts, ..._knownNodes];
   List<Contact> get onlineContacts =>
-      _savedContacts.where((c) => c.isOnline).toList();
+      _myContacts.where((c) => c.isOnline).toList();
   List<Contact> get offlineContacts =>
-      _savedContacts.where((c) => !c.isOnline).toList();
+      _myContacts.where((c) => !c.isOnline).toList();
   List<Contact> get favoriteContacts =>
-      _savedContacts.where((c) => c.trustLevel == TrustLevel.favorite).toList();
+      _myContacts.where((c) => c.trustLevel == TrustLevel.favorite).toList();
+  bool get contactsSynced => _contactsSynced;
 
   // ── Nearby ────────────────────────────────────────────────────────────────
 
@@ -327,7 +378,8 @@ class ChatProvider extends ChangeNotifier {
   // ── DM conversations ──────────────────────────────────────────────────────
 
   List<Contact> get activeConversations {
-    final withMessages = _savedContacts
+    final allContacts = [..._myContacts, ..._knownNodes];
+    final withMessages = allContacts
         .where((c) =>
             _conversations.containsKey(c.id) &&
             _conversations[c.id]!.isNotEmpty)
@@ -398,7 +450,8 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
     _db.then((db) => db.upsertMessage(msg, contactId: contactId));
 
-    final contact = _savedContacts.where((c) => c.id == contactId).firstOrNull;
+    Contact? contact = _myContacts.where((c) => c.id == contactId).firstOrNull;
+    contact ??= _knownNodes.where((c) => c.id == contactId).firstOrNull;
 
     // Real BLE send
     if (_ble.isConnected && contact != null && _isValidPubKeyHex(contact.address)) {
@@ -418,7 +471,7 @@ class ChatProvider extends ChangeNotifier {
             status: DeliveryStatus.failed,
             failReason: 'No acknowledgement received',
           );
-          _pendingByAddress.remove(contact.address);
+          if (contact != null) _pendingByAddress.remove(contact.address);
           notifyListeners();
           _db.then((db) => db.upsertMessage(_conversations[contactId]![idx], contactId: contactId));
         }
@@ -525,7 +578,8 @@ class ChatProvider extends ChangeNotifier {
     _db.then((db) =>
         db.upsertMessage(_conversations[contactId]![idx], contactId: contactId));
 
-    final contact = _savedContacts.where((c) => c.id == contactId).firstOrNull;
+    Contact? contact = _myContacts.where((c) => c.id == contactId).firstOrNull;
+    contact ??= _knownNodes.where((c) => c.id == contactId).firstOrNull;
 
     // Real BLE retry
     if (_ble.isConnected && contact != null && _isValidPubKeyHex(contact.address)) {
@@ -661,8 +715,9 @@ class ChatProvider extends ChangeNotifier {
 
   void addContact(Contact node, {String? alias}) {
     final contact = node.copyWith(alias: alias, trustLevel: TrustLevel.saved);
-    _savedContacts.add(contact);
+    _myContacts.add(contact);
     _nearbyNodes.removeWhere((n) => n.id == node.id);
+    _knownNodes.removeWhere((n) => n.id == node.id);
     notifyListeners();
     _db.then((db) => db.insertContact(contact));
 
@@ -673,35 +728,40 @@ class ChatProvider extends ChangeNotifier {
   }
 
   void toggleFavorite(String contactId) {
-    final idx = _savedContacts.indexWhere((c) => c.id == contactId);
+    final idx = _myContacts.indexWhere((c) => c.id == contactId);
     if (idx == -1) return;
-    final c = _savedContacts[idx];
-    _savedContacts[idx] = c.copyWith(
+    final c = _myContacts[idx];
+    _myContacts[idx] = c.copyWith(
       trustLevel:
           c.trustLevel == TrustLevel.favorite ? TrustLevel.saved : TrustLevel.favorite,
     );
     notifyListeners();
-    _db.then((db) => db.updateContact(_savedContacts[idx]));
+    _db.then((db) => db.updateContact(_myContacts[idx]));
   }
 
   void renameContact(String contactId, String newAlias) {
-    final idx = _savedContacts.indexWhere((c) => c.id == contactId);
+    final idx = _myContacts.indexWhere((c) => c.id == contactId);
     if (idx == -1) return;
-    _savedContacts[idx] = _savedContacts[idx].copyWith(alias: newAlias);
+    _myContacts[idx] = _myContacts[idx].copyWith(alias: newAlias);
     notifyListeners();
-    _db.then((db) => db.updateContact(_savedContacts[idx]));
+    _db.then((db) => db.updateContact(_myContacts[idx]));
   }
 
   void removeContact(String contactId) {
-    final contact = _savedContacts.firstWhere((c) => c.id == contactId);
-    _savedContacts.removeWhere((c) => c.id == contactId);
-    _nearbyNodes.add(contact.copyWith(trustLevel: TrustLevel.unknown));
+    Contact? contact;
+    try {
+      contact = _myContacts.firstWhere((c) => c.id == contactId);
+    } catch (_) {}
+    _myContacts.removeWhere((c) => c.id == contactId);
+    if (contact != null) {
+      _knownNodes.add(contact.copyWith(trustLevel: TrustLevel.unknown));
+    }
     _conversations.remove(contactId);
     notifyListeners();
     _db.then((db) => db.deleteContact(contactId));
 
     // Tell radio to remove contact (only for real keys)
-    if (_ble.isConnected && _isValidPubKeyHex(contact.address)) {
+    if (contact != null && _ble.isConnected && _isValidPubKeyHex(contact.address)) {
       _ble.sendFrame(buildRemoveContactFrame(contact.address));
     }
   }
@@ -751,7 +811,7 @@ class ChatProvider extends ChangeNotifier {
 
   void enableDemoMode() {
     _demoMode = true;
-    _savedContacts = List.from(MockData.savedContacts);
+    _myContacts = List.from(MockData.savedContacts);
     _nearbyNodes.clear();
     _nearbyNodes.addAll(MockData.nearbyNodes);
     _channels = List.from(MockData.channels);
@@ -764,7 +824,8 @@ class ChatProvider extends ChangeNotifier {
 
   void disableDemoMode() {
     _demoMode = false;
-    _savedContacts.clear();
+    _myContacts.clear();
+    _knownNodes.clear();
     _nearbyNodes.clear();
     _channels.clear();
     _conversations.clear();
@@ -783,11 +844,13 @@ class ChatProvider extends ChangeNotifier {
     await db.deleteAll();
 
     // Load persisted real data (will be empty on fresh install — that's correct)
-    _savedContacts = await db.getAllContacts();
+    final allContacts = await db.getAllContacts();
+    _myContacts = allContacts.where((c) => c.trustLevel == TrustLevel.saved || c.trustLevel == TrustLevel.favorite).toList();
+    _knownNodes = allContacts.where((c) => c.trustLevel == TrustLevel.unknown).toList();
     _channels = await db.getAllChannels();
 
     _conversations.clear();
-    for (final contact in _savedContacts) {
+    for (final contact in allContacts) {
       final msgs = await db.getMessagesForContact(contact.id);
       if (msgs.isNotEmpty) _conversations[contact.id] = msgs;
     }

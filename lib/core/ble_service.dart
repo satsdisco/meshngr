@@ -149,6 +149,12 @@ class BleService extends ChangeNotifier {
       // Request contacts
       await sendFrame(buildGetContactsFrame());
 
+      // Request channels (slots 0-7)
+      for (int i = 0; i < 8; i++) {
+        await sendFrame(buildGetChannelFrame(i));
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+
     } catch (e) {
       debugPrint('BLE connect error: $e');
       await _cleanup();
