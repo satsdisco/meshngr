@@ -761,6 +761,40 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> retryChannelMessage(String channelId, String messageId) async {
+    final msgs = _channelConversations[channelId];
+    if (msgs == null) return;
+    final idx = msgs.indexWhere((m) => m.id == messageId);
+    if (idx == -1) return;
+
+    final old = msgs[idx];
+    _channelConversations[channelId]![idx] = old.copyWith(
+      status: DeliveryStatus.pending,
+      retryCount: old.retryCount + 1,
+    );
+    notifyListeners();
+    _db.then((db) => db.upsertMessage(_channelConversations[channelId]![idx], channelId: channelId));
+
+    if (_ble.isConnected) {
+      try {
+        final radioIdx = _getRadioChannelIdx(channelId);
+        await _ble.sendChannelMessage(radioIdx, old.text);
+      } catch (e) {
+        _channelConversations[channelId]![idx] = old.copyWith(
+          status: DeliveryStatus.failed,
+          failReason: 'Retry failed: $e',
+        );
+        notifyListeners();
+      }
+    } else {
+      _channelConversations[channelId]![idx] = old.copyWith(
+        status: DeliveryStatus.failed,
+        failReason: 'Radio not connected',
+      );
+      notifyListeners();
+    }
+  }
+
   int _getRadioChannelIdx(String channelId) {
     // Check reverse map first
     for (final entry in _radioChannelMap.entries) {

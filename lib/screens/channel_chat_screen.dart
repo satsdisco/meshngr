@@ -325,6 +325,9 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
                             showSender: showSender,
                             formatTime: _formatTime,
                             onSenderTap: (name) => _showSenderProfile(context, name),
+                            onRetry: msg.status == DeliveryStatus.failed
+                                ? () => context.read<ChatProvider>().retryChannelMessage(widget.channel.id, msg.id)
+                                : null,
                           ),
                         );
                       },
@@ -464,19 +467,22 @@ class _ChannelBubble extends StatelessWidget {
   final bool showSender;
   final String Function(DateTime) formatTime;
   final void Function(String senderName)? onSenderTap;
+  final VoidCallback? onRetry;
 
   const _ChannelBubble({
     required this.message,
     required this.showSender,
     required this.formatTime,
     this.onSenderTap,
+    this.onRetry,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: message.isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
+    return Column(
+      crossAxisAlignment: message.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+      Container(
         constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
         margin: EdgeInsets.only(
           left: message.isMe ? 48 : 16,
@@ -554,7 +560,13 @@ class _ChannelBubble extends StatelessWidget {
                   ),
                   if (message.isMe) ...[
                     const SizedBox(width: 4),
-                    _deliveryIcon(message.status),
+                    if (message.status == DeliveryStatus.failed && onRetry != null)
+                      GestureDetector(
+                        onTap: onRetry,
+                        child: _deliveryIcon(message.status),
+                      )
+                    else
+                      _deliveryIcon(message.status),
                   ],
                 ],
               ),
@@ -562,6 +574,25 @@ class _ChannelBubble extends StatelessWidget {
           ],
         ),
       ),
+      if (message.isMe && message.status == DeliveryStatus.failed && onRetry != null)
+        Align(
+          alignment: Alignment.centerRight,
+          child: GestureDetector(
+            onTap: onRetry,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 20, top: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.refresh, size: 13, color: Colors.red.shade300),
+                  const SizedBox(width: 3),
+                  Text('Tap to retry', style: TextStyle(fontSize: 11, color: Colors.red.shade300)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
