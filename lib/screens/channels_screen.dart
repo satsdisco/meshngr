@@ -4,8 +4,15 @@ import '../theme/app_theme.dart';
 import '../providers/chat_provider.dart';
 import 'channel_chat_screen.dart';
 
-class ChannelsScreen extends StatelessWidget {
+class ChannelsScreen extends StatefulWidget {
   const ChannelsScreen({super.key});
+
+  @override
+  State<ChannelsScreen> createState() => _ChannelsScreenState();
+}
+
+class _ChannelsScreenState extends State<ChannelsScreen> {
+  bool _otherExpanded = false;
 
   String _formatTime(DateTime? time) {
     if (time == null) return '';
@@ -150,21 +157,47 @@ class ChannelsScreen extends StatelessWidget {
             // Discovered channels (received messages but not explicitly joined)
             if (available.isNotEmpty) ...[
               if (joined.isNotEmpty) const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                child: Text(
-                  'OTHER ACTIVITY',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(letterSpacing: 1.2),
+              GestureDetector(
+                onTap: () => setState(() => _otherExpanded = !_otherExpanded),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: Row(
+                    children: [
+                      Text(
+                        'OTHER ACTIVITY',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(letterSpacing: 1.2),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: AppColors.textTertiary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${available.length}',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 10),
+                        ),
+                      ),
+                      const Spacer(),
+                      Icon(
+                        _otherExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                        size: 18,
+                        color: AppColors.textTertiary,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Text(
-                  'Channels your radio picked up. Join to participate.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textTertiary, fontSize: 11),
+              if (!_otherExpanded)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Text(
+                    'Tap to see ${available.length} channels your radio picked up.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textTertiary, fontSize: 11),
+                  ),
                 ),
-              ),
-              ...available.map((channel) => _ChannelTile(
+              if (_otherExpanded) ...available.map((channel) => _ChannelTile(
                 channel: channel,
                 timeLabel: _formatTime(channel.lastMessageTime),
                 onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => ChannelChatScreen(channel: channel))); },

@@ -278,20 +278,22 @@ class ChatProvider extends ChangeNotifier {
   }
 
   void _handleChannelInfo(DeviceChannel dc) {
-    // Skip empty/unnamed channels
+    // Skip completely empty channels (no name, all-zero key)
     if (dc.name.isEmpty || dc.name.trim().isEmpty) return;
-    // Skip channels named "Channel N" with all-zero keys (empty slots)
     final isEmptyKey = dc.key.every((b) => b == 0);
     if (isEmptyKey && dc.name.startsWith('Channel ')) return;
 
     final channelId = 'radio_ch_${dc.index}';
     _radioChannelMap[dc.index] = channelId;
 
+    // Channels with real names (not "Channel NNN") are considered explicitly joined
+    final hasRealName = !RegExp(r'^Channel \d+$').hasMatch(dc.name);
+
     final existing = _channels.indexWhere((c) => c.id == channelId);
     final channel = Channel(
       id: channelId,
       name: dc.name,
-      isJoined: true, // Radio channels are always "joined"
+      isJoined: hasRealName, // Only mark as joined if it has a real name
       memberCount: 0,
     );
 
