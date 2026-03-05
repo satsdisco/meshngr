@@ -211,6 +211,21 @@ class BleService extends ChangeNotifier {
     await sendFrame(buildSetAdvertNameFrame(name));
   }
 
+  /// Set a channel on the radio (slot 0-7)
+  Future<void> setChannel(int index, String name, Uint8List psk) async {
+    await sendFrame(buildSetChannelFrame(index, name, psk));
+    // Re-query to confirm
+    await Future.delayed(const Duration(milliseconds: 200));
+    await sendFrame(buildGetChannelFrame(index));
+  }
+
+  /// Remove a channel (clear the slot)
+  Future<void> removeChannel(int index) async {
+    await sendFrame(buildSetChannelFrame(index, '', Uint8List(16)));
+    await Future.delayed(const Duration(milliseconds: 200));
+    await sendFrame(buildGetChannelFrame(index));
+  }
+
   /// Sync next pending message
   Future<void> syncNextMessage() async {
     await sendFrame(buildSyncNextMessageFrame());

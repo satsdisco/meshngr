@@ -9,6 +9,7 @@ import 'channels_screen.dart';
 import 'contacts_screen.dart';
 import 'settings_screen.dart';
 import 'nearby_sheet.dart';
+import 'add_channel_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -87,7 +88,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showNearbySheet,
+        onPressed: () {
+          if (_tabController.index == 1) {
+            // Channels tab → Add Channel
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const AddChannelScreen()));
+          } else {
+            // Messages/Contacts → Nearby sheet
+            _showNearbySheet();
+          }
+        },
         child: const Icon(Icons.add),
       ),
     );

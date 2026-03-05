@@ -122,6 +122,12 @@ class AppDatabase {
     );
   }
 
+  Future<void> deleteChannel(String id) async {
+    final db = await _database;
+    await db.delete('channels', where: 'id = ?', whereArgs: [id]);
+    await db.delete('messages', where: 'channelId = ?', whereArgs: [id]);
+  }
+
   Future<void> deleteContact(String id) async {
     final db = await _database;
     await db.delete('contacts', where: 'id = ?', whereArgs: [id]);

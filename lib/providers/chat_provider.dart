@@ -784,6 +784,24 @@ class ChatProvider extends ChangeNotifier {
     _db.then((db) => db.updateChannel(_channels[idx]));
   }
 
+  /// Remove a channel completely (clears radio slot + local data)
+  void removeChannel(String channelId) {
+    final idx = _channels.indexWhere((c) => c.id == channelId);
+    if (idx == -1) return;
+
+    // Extract radio slot index
+    final match = RegExp(r'radio_ch_(\d+)').firstMatch(channelId);
+    if (match != null && _ble.isConnected) {
+      final slotIdx = int.parse(match.group(1)!);
+      _ble.removeChannel(slotIdx);
+    }
+
+    _channels.removeAt(idx);
+    _channelConversations.remove(channelId);
+    notifyListeners();
+    _db.then((db) => db.deleteChannel(channelId));
+  }
+
   void toggleMuteChannel(String channelId) {
     final idx = _channels.indexWhere((c) => c.id == channelId);
     if (idx == -1) return;

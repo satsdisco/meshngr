@@ -181,6 +181,27 @@ Uint8List buildGetBattAndStorageFrame() {
 }
 
 /// Request channel info by index
+/// Build CMD_SET_CHANNEL frame: [cmd][idx][name x32][psk x16]
+Uint8List buildSetChannelFrame(int channelIdx, String name, Uint8List psk) {
+  final w = BufferWriter();
+  w.writeByte(Cmd.setChannel);
+  w.writeByte(channelIdx);
+  // Name: 32 bytes, null-padded
+  final nameBytes = Uint8List(32);
+  final encoded = name.codeUnits;
+  for (int i = 0; i < encoded.length && i < 31; i++) {
+    nameBytes[i] = encoded[i];
+  }
+  w.writeBytes(nameBytes);
+  // PSK: 16 bytes
+  final pskPadded = Uint8List(16);
+  for (int i = 0; i < 16 && i < psk.length; i++) {
+    pskPadded[i] = psk[i];
+  }
+  w.writeBytes(pskPadded);
+  return w.toBytes();
+}
+
 Uint8List buildGetChannelFrame(int channelIdx) {
   return Uint8List.fromList([Cmd.getChannel, channelIdx]);
 }
