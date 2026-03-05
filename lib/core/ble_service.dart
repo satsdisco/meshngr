@@ -223,7 +223,10 @@ class BleService extends ChangeNotifier {
 
   /// Send a channel message
   Future<void> sendChannelMessage(int channelIdx, String text) async {
-    await sendFrame(buildSendChannelTextMsgFrame(channelIdx, text));
+    _log('Sending channel msg: idx=$channelIdx text="$text"');
+    final frame = buildSendChannelTextMsgFrame(channelIdx, text);
+    _log('Frame bytes: ${frame.map((b) => b.toRadixString(16).padLeft(2, "0")).join(" ")}');
+    await sendFrame(frame);
   }
 
   /// Send self advertisement
@@ -284,10 +287,16 @@ class BleService extends ChangeNotifier {
         notifyListeners();
       }
       if (parsed.code == Resp.sent) {
-        _log('Radio ACK: message accepted for TX');
+        _log('SENT! Radio transmitted message (code=6, len=${frame.length})');
       }
       if (parsed.code == Resp.ok) {
         _log('Radio OK (generic ACK)');
+      }
+      if (parsed.code == Resp.err) {
+        _log('⚠️ Radio ERROR (code=1)');
+      }
+      if (parsed.code == Resp.deviceInfo) {
+        _log('DeviceInfo (code=13, len=${frame.length})');
       }
       if (parsed.code == Resp.contact && parsed.data is DeviceContact) {
         final dc = parsed.data as DeviceContact;

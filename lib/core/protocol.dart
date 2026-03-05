@@ -105,7 +105,7 @@ Uint8List buildDeviceQueryFrame() {
 Uint8List buildAppStartFrame() {
   final w = BufferWriter();
   w.writeByte(Cmd.appStart);
-  w.writeByte(appProtocolVersion);
+  w.writeByte(1); // app version (1 = standard companion app)
   w.writeBytes(Uint8List(6)); // reserved bytes
   w.writeString('meshngr');
   w.writeByte(0); // null terminator
