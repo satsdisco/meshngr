@@ -94,10 +94,14 @@ const int appProtocolVersion = 3;
 // ─── Frame builders ──────────────────────────────────────────
 
 /// App start handshake — sent after BLE connect
+/// Format: [cmd][app_ver][reserved x6][app_name...]\0
 Uint8List buildAppStartFrame() {
   final w = BufferWriter();
   w.writeByte(Cmd.appStart);
   w.writeByte(appProtocolVersion);
+  w.writeBytes(Uint8List(6)); // reserved bytes
+  w.writeString('meshngr');
+  w.writeByte(0); // null terminator
   return w.toBytes();
 }
 
@@ -119,27 +123,19 @@ Uint8List buildSetDeviceTimeFrame() {
   return w.toBytes();
 }
 
-/// Send text message to a contact
-/// [pubKeyHex] — 32-byte public key as hex string
-/// [text] — message text
-/// [pathBytes] — routing path (empty = flood, null = auto)
-Uint8List buildSendTextMsgFrame(String pubKeyHex, String text, {Uint8List? pathBytes}) {
+/// Send text message to a contact (companion_radio format)
+/// Format: [cmd][txt_type][attempt][timestamp x4][pub_key_prefix x6][text...]\0
+Uint8List buildSendTextMsgFrame(String pubKeyHex, String text, {int attempt = 0, Uint8List? pathBytes}) {
   final w = BufferWriter();
   w.writeByte(Cmd.sendTextMsg);
   w.writeByte(0); // txtTypePlain
-  w.writeHex(pubKeyHex);
-
-  // Path: empty = flood, bytes = direct path
-  final path = pathBytes ?? Uint8List(0);
-  w.writeByte(path.length);
-  if (path.isNotEmpty) w.writeBytes(path);
-
-  // Timestamp
+  w.writeByte(attempt.clamp(0, 3));
   w.writeUInt32LE(DateTime.now().millisecondsSinceEpoch ~/ 1000);
-
-  // Message text
+  // Only first 6 bytes of public key (prefix match)
+  final fullKey = hexToBytes(pubKeyHex);
+  w.writeBytes(fullKey.sublist(0, 6));
   w.writeString(text);
-
+  w.writeByte(0); // null terminator
   return w.toBytes();
 }
 
@@ -153,6 +149,7 @@ Uint8List buildSendChannelTextMsgFrame(int channelIdx, String text) {
   w.writeByte(channelIdx);
   w.writeUInt32LE(DateTime.now().millisecondsSinceEpoch ~/ 1000);
   w.writeString(text);
+  w.writeByte(0); // null terminator
   return w.toBytes();
 }
 

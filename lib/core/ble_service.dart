@@ -192,8 +192,8 @@ class BleService extends ChangeNotifier {
   // ─── Convenience methods ─────────────────────────────────
 
   /// Send a text message to a contact
-  Future<void> sendTextMessage(String pubKeyHex, String text, {Uint8List? path}) async {
-    await sendFrame(buildSendTextMsgFrame(pubKeyHex, text, pathBytes: path));
+  Future<void> sendTextMessage(String pubKeyHex, String text, {int attempt = 0}) async {
+    await sendFrame(buildSendTextMsgFrame(pubKeyHex, text, attempt: attempt));
   }
 
   /// Send a channel message
