@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'buffer.dart';
 
@@ -415,9 +416,30 @@ ParsedFrame parseFrame(Uint8List frame) {
 // ─── Internal parsers ────────────────────────────────────────
 
 ParsedFrame _parseSelfInfo(BufferReader r, int code) {
-  if (r.remaining < pubKeySize) return ParsedFrame(code);
+  // SELF_INFO format (after response code byte, which is already consumed):
+  // [0] adv_type, [1] tx_power, [2] max_tx_power
+  // [3-34] pub_key (32 bytes)
+  // [35-38] lat (int32 LE), [39-42] lon (int32 LE)
+  // [43] multi_acks, [44] advert_loc_policy, [45] telemetry, [46] manual_add
+  // [47-50] freq (uint32 LE), [51-54] bw (uint32 LE), [55] sf, [56] cr
+  // [57+] node_name (null-terminated string)
+  if (r.remaining < 3 + pubKeySize) return ParsedFrame(code);
+
+  final advType = r.readUInt8();
+  final txPower = r.readUInt8();
+  final maxTxPower = r.readUInt8();
   final pubKey = r.readBytes(pubKeySize);
-  final name = r.remaining > 0 ? r.readCString(maxNameSize.clamp(0, r.remaining)) : '';
+
+  // Skip lat(4) + lon(4) + multi_acks(1) + advert_loc(1) + telemetry(1) + manual_add(1)
+  if (r.remaining >= 12) {
+    r.readBytes(12); // lat + lon + 4 flag bytes
+  }
+  // Skip freq(4) + bw(4) + sf(1) + cr(1)
+  if (r.remaining >= 10) {
+    r.readBytes(10);
+  }
+
+  final name = r.remaining > 0 ? r.readCString(r.remaining.clamp(0, maxNameSize)) : '';
   return ParsedFrame(code, DeviceSelfInfo(
     publicKey: pubKey,
     publicKeyHex: _bytesToHex(pubKey),
@@ -426,19 +448,55 @@ ParsedFrame _parseSelfInfo(BufferReader r, int code) {
 }
 
 ParsedFrame _parseContact(BufferReader r, int code) {
-  if (r.remaining < pubKeySize + 3) return ParsedFrame(code);
-  final pubKey = r.readBytes(pubKeySize);
-  final advType = r.readUInt8();
-  final flags = r.readUInt8();
-  final pathLen = r.readUInt8();
-  final path = pathLen > 0 && r.remaining >= pathLen ? r.readBytes(pathLen) : Uint8List(0);
+  // Contact frame uses FIXED offsets (after response code byte, already consumed):
+  // [0-31] pub_key (32 bytes)
+  // [32] adv_type, [33] flags, [34] pathLen
+  // [35-98] path (64 bytes fixed)
+  // [99-130] name (32 bytes, null-terminated)
+  // [131-134] timestamp (uint32 LE)
+  // [135-138] lat (int32 LE)
+  // [139-142] lon (int32 LE)
+  // [143-146] lastmod (uint32 LE)
+  // SNR is encoded in pathLen sign bit or separate field
+  final data = r.readBytes(r.remaining);
+  if (data.length < pubKeySize + 3) return ParsedFrame(code);
 
-  double? snr;
+  final pubKey = Uint8List.fromList(data.sublist(0, pubKeySize));
+  final advType = data[32];
+  final flags = data[33];
+  final pathLenRaw = data[34];
+  // pathLen can be signed (negative = SNR indicator in some firmware)
+  final pathLen = pathLenRaw > 127 ? pathLenRaw - 256 : pathLenRaw;
+  final safePathLen = pathLen > 0 ? (pathLen > 64 ? 64 : pathLen) : 0;
+  final path = safePathLen > 0 ? Uint8List.fromList(data.sublist(35, 35 + safePathLen)) : Uint8List(0);
+
+  // Name at fixed offset 99
+  String name = '';
+  if (data.length > 99) {
+    final nameEnd = (99 + maxNameSize).clamp(0, data.length);
+    final nameBytes = data.sublist(99, nameEnd);
+    final nullIdx = nameBytes.indexOf(0);
+    final trimmed = nullIdx >= 0 ? nameBytes.sublist(0, nullIdx) : nameBytes;
+    try {
+      name = utf8.decode(Uint8List.fromList(trimmed), allowMalformed: true);
+    } catch (_) {
+      name = String.fromCharCodes(trimmed);
+    }
+  }
+
+  // Timestamp at offset 131
   int? lastSeen;
-  if (r.remaining >= 1) snr = r.readInt8() / 4.0;
-  if (r.remaining >= 4) lastSeen = r.readUInt32LE();
+  if (data.length >= 135) {
+    lastSeen = data[131] | (data[132] << 8) | (data[133] << 16) | (data[134] << 24);
+    if (lastSeen == 0) lastSeen = null;
+  }
 
-  final name = r.remaining > 0 ? r.readCString(maxNameSize.clamp(0, r.remaining)) : '';
+  // SNR: derive from path data or use a default
+  double? snr;
+  // Some firmware encodes last SNR in the path bytes after the actual path
+  if (safePathLen > 0 && safePathLen < 64 && data.length > 35 + safePathLen) {
+    // SNR sometimes at end of path area
+  }
 
   return ParsedFrame(code, DeviceContact(
     publicKey: pubKey,
