@@ -38,10 +38,12 @@ class _QrScanScreenState extends State<QrScanScreen> {
     String? name;
     String? rawContactHex; // Full contact frame hex for radio import
 
-    if (raw.startsWith('meshcore://contact?')) {
+    if (raw.startsWith('meshcore://contact')) {
+      // Format: meshcore://contact/add?name=X&public_key=HEX&type=N
+      // or: meshcore://contact?key=HEX&name=X
       final uri = Uri.tryParse(raw);
       if (uri != null) {
-        address = uri.queryParameters['key'];
+        address = uri.queryParameters['public_key'] ?? uri.queryParameters['key'];
         name = uri.queryParameters['name'];
       }
     } else if (raw.startsWith('meshcore://')) {
@@ -90,7 +92,10 @@ class _QrScanScreenState extends State<QrScanScreen> {
           duration: const Duration(seconds: 5),
         ),
       );
-      setState(() => _scanned = false);
+      // Cooldown before re-scanning to prevent error spam
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) setState(() => _scanned = false);
+      });
       return;
     }
 

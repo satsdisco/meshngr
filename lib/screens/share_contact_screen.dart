@@ -52,7 +52,8 @@ class ShareContactScreen extends StatelessWidget {
           }
 
           // QR data format: meshcore://contact?key=<pubKeyHex>&name=<name>
-          final qrData = 'meshcore://contact?key=$pubKeyHex&name=${Uri.encodeComponent(name)}';
+          // Use the standard MeshCore QR format for cross-app compatibility
+          final qrData = 'meshcore://contact/add?name=${Uri.encodeComponent(name)}&public_key=$pubKeyHex&type=1';
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(32),
