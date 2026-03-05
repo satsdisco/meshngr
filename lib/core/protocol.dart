@@ -536,11 +536,19 @@ ParsedFrame _parseBattStorage(BufferReader r, int code) {
 }
 
 ParsedFrame _parseChannelInfo(BufferReader r, int code) {
-  if (r.remaining < 2) return ParsedFrame(code);
+  // Format: [idx][name x32][psk x16]
+  if (r.remaining < 49) return ParsedFrame(code); // 1 + 32 + 16
   final idx = r.readUInt8();
-  final keyLen = 32;
-  final key = r.remaining >= keyLen ? r.readBytes(keyLen) : Uint8List(0);
-  final name = r.remaining > 0 ? r.readCString(maxNameSize.clamp(0, r.remaining)) : 'Channel $idx';
+  // Name: 32 bytes, null-terminated
+  final nameBytes = r.readBytes(32);
+  // Find null terminator
+  int nameLen = 32;
+  for (int i = 0; i < 32; i++) {
+    if (nameBytes[i] == 0) { nameLen = i; break; }
+  }
+  final name = String.fromCharCodes(nameBytes, 0, nameLen);
+  // PSK: 16 bytes
+  final key = r.remaining >= 16 ? r.readBytes(16) : Uint8List(16);
   return ParsedFrame(code, DeviceChannel(index: idx, name: name, key: key));
 }
 
