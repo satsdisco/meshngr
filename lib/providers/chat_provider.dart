@@ -113,6 +113,11 @@ class ChatProvider extends ChangeNotifier {
         }
         break;
 
+      case Resp.sent:
+        // Radio confirmed message was transmitted over the air
+        _handleRadioSent();
+        break;
+
       case Push.sendConfirmed:
         if (frame.data is String) {
           _handleSendConfirmed(frame.data as String);
@@ -318,6 +323,37 @@ class ChatProvider extends ChangeNotifier {
       return;
     }
     _mergeDeviceContact(dc, fromRadioList: false);
+  }
+
+  void _handleRadioSent() {
+    // Mark the most recent pending channel message as sent
+    for (final entry in _channelConversations.entries) {
+      final msgs = entry.value;
+      for (int i = msgs.length - 1; i >= 0; i--) {
+        if (msgs[i].isMe && msgs[i].status == DeliveryStatus.pending) {
+          _channelConversations[entry.key]![i] = msgs[i].copyWith(
+            status: DeliveryStatus.sent,
+          );
+          notifyListeners();
+          _db.then((db) => db.upsertMessage(_channelConversations[entry.key]![i], channelId: entry.key));
+          return;
+        }
+      }
+    }
+    // Also check DM conversations
+    for (final entry in _conversations.entries) {
+      final msgs = entry.value;
+      for (int i = msgs.length - 1; i >= 0; i--) {
+        if (msgs[i].isMe && msgs[i].status == DeliveryStatus.pending) {
+          _conversations[entry.key]![i] = msgs[i].copyWith(
+            status: DeliveryStatus.sent,
+          );
+          notifyListeners();
+          _db.then((db) => db.upsertMessage(_conversations[entry.key]![i], contactId: entry.key));
+          return;
+        }
+      }
+    }
   }
 
   void _handleSendConfirmed(String recipientKeyHex) {
@@ -670,8 +706,7 @@ class ChatProvider extends ChangeNotifier {
       isMe: true,
       senderName: 'You',
       senderColor: 0xFF4A9EFF,
-      // Channels are broadcast — start as pending, move to sent after BLE transmit
-      // No delivery confirmation exists for channel messages
+      // Start as pending — will move to sent when radio confirms (code=6)
       status: _ble.isConnected ? DeliveryStatus.pending : DeliveryStatus.failed,
       failReason: _ble.isConnected ? null : 'Radio not connected',
     );
@@ -694,18 +729,8 @@ class ChatProvider extends ChangeNotifier {
       final radioIdx = _getRadioChannelIdx(channelId);
       try {
         await _ble.sendChannelMessage(radioIdx, text);
-        // Channel messages are broadcast — mark as sent (no delivery ACK)
-        final msgs = _channelConversations[channelId];
-        if (msgs != null) {
-          final msgIdx = msgs.indexWhere((m) => m.id == msg.id);
-          if (msgIdx != -1) {
-            _channelConversations[channelId]![msgIdx] = msgs[msgIdx].copyWith(
-              status: DeliveryStatus.sent,
-            );
-            notifyListeners();
-            _db.then((db) => db.upsertMessage(_channelConversations[channelId]![msgIdx], channelId: channelId));
-          }
-        }
+        // Message stays pending until radio confirms with Resp.sent (code=6)
+        // _handleRadioSent() will update status when we get the confirmation
       } catch (e) {
         // BLE send failed
         final msgs = _channelConversations[channelId];

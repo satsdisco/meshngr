@@ -175,7 +175,10 @@ class BleService extends ChangeNotifier {
       }
 
       // 7. Request contacts (after selfInfo + channels are loaded)
+      _log('Requesting contacts');
       await sendFrame(buildGetContactsFrame());
+
+      // Note: syncNextMessage is called by ChatProvider after endOfContacts
 
     } catch (e) {
       _log('CONNECT ERROR: $e');
@@ -256,6 +259,7 @@ class BleService extends ChangeNotifier {
 
   /// Sync next pending message
   Future<void> syncNextMessage() async {
+    _log('Requesting next queued message');
     await sendFrame(buildSyncNextMessageFrame());
   }
 
