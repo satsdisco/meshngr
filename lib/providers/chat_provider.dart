@@ -904,11 +904,8 @@ class ChatProvider extends ChangeNotifier {
   }
 
   void leaveChannel(String channelId) {
-    final idx = _channels.indexWhere((c) => c.id == channelId);
-    if (idx == -1) return;
-    _channels[idx] = _channels[idx].copyWith(isJoined: false);
-    notifyListeners();
-    _db.then((db) => db.updateChannel(_channels[idx]));
+    // Actually remove from radio to free the slot
+    removeChannel(channelId);
   }
 
   /// Remove a channel completely (clears radio slot + local data)

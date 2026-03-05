@@ -190,11 +190,14 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                 ),
               ),
               if (!_otherExpanded)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Text(
-                    'Tap to see ${available.length} channels your radio picked up.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textTertiary, fontSize: 11),
+                GestureDetector(
+                  onTap: () => setState(() => _otherExpanded = true),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Text(
+                      'Tap to see ${available.length} channels your radio picked up.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textTertiary, fontSize: 11),
+                    ),
                   ),
                 ),
               if (_otherExpanded) ...available.map((channel) => _ChannelTile(
