@@ -661,7 +661,7 @@ class ChatProvider extends ChangeNotifier {
 
   // ── Send channel message ──────────────────────────────────────────────────
 
-  void sendChannelMessage(String channelId, String text) {
+  Future<void> sendChannelMessage(String channelId, String text) async {
     final msg = Message(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       text: text,
@@ -692,36 +692,50 @@ class ChatProvider extends ChangeNotifier {
     // Real BLE send
     if (_ble.isConnected) {
       final radioIdx = _getRadioChannelIdx(channelId);
-      _ble.sendChannelMessage(radioIdx, text);
-      // Channel messages are broadcast — mark as sent (no delivery ACK possible)
-      Future.delayed(const Duration(milliseconds: 300), () {
+      try {
+        await _ble.sendChannelMessage(radioIdx, text);
+        // Channel messages are broadcast — mark as sent (no delivery ACK)
         final msgs = _channelConversations[channelId];
-        if (msgs == null) return;
-        final msgIdx = msgs.indexWhere((m) => m.id == msg.id);
-        if (msgIdx != -1 && msgs[msgIdx].status == DeliveryStatus.pending) {
-          _channelConversations[channelId]![msgIdx] = msgs[msgIdx].copyWith(
-            status: DeliveryStatus.sent,
-          );
-          notifyListeners();
-          _db.then((db) => db.upsertMessage(_channelConversations[channelId]![msgIdx], channelId: channelId));
+        if (msgs != null) {
+          final msgIdx = msgs.indexWhere((m) => m.id == msg.id);
+          if (msgIdx != -1) {
+            _channelConversations[channelId]![msgIdx] = msgs[msgIdx].copyWith(
+              status: DeliveryStatus.sent,
+            );
+            notifyListeners();
+            _db.then((db) => db.upsertMessage(_channelConversations[channelId]![msgIdx], channelId: channelId));
+          }
         }
-      });
+      } catch (e) {
+        // BLE send failed
+        final msgs = _channelConversations[channelId];
+        if (msgs != null) {
+          final msgIdx = msgs.indexWhere((m) => m.id == msg.id);
+          if (msgIdx != -1) {
+            _channelConversations[channelId]![msgIdx] = msgs[msgIdx].copyWith(
+              status: DeliveryStatus.failed,
+              failReason: 'Send failed: $e',
+            );
+            notifyListeners();
+          }
+        }
+      }
     }
   }
 
   int _getRadioChannelIdx(String channelId) {
-    // Check reverse map
+    // Check reverse map first
     for (final entry in _radioChannelMap.entries) {
       if (entry.value == channelId) return entry.key;
     }
-    // For 'ch_radio_N' IDs
-    if (channelId.startsWith('ch_radio_')) {
-      return int.tryParse(channelId.substring(9)) ?? 0;
-    }
-    // Default: use position in joined channels list
-    final joined = joinedChannels;
-    final pos = joined.indexWhere((c) => c.id == channelId);
-    return pos >= 0 ? pos : 0;
+    // For 'radio_ch_N' IDs (from _handleChannelInfo)
+    final match = RegExp(r'radio_ch_(\d+)').firstMatch(channelId);
+    if (match != null) return int.parse(match.group(1)!);
+    // For 'ch_radio_N' IDs (from _handleIncomingChannelMsg)
+    final match2 = RegExp(r'ch_radio_(\d+)').firstMatch(channelId);
+    if (match2 != null) return int.parse(match2.group(1)!);
+    // Default
+    return 0;
   }
 
   void deleteChannelMessage(String channelId, String messageId) {

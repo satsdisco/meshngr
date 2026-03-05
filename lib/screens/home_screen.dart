@@ -10,6 +10,7 @@ import 'contacts_screen.dart';
 import 'settings_screen.dart';
 import 'nearby_sheet.dart';
 import 'add_channel_screen.dart';
+import 'share_contact_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -61,6 +62,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             icon: const Icon(Icons.radar, size: 22),
             tooltip: 'Nearby nodes',
             onPressed: _showNearbySheet,
+          ),
+          IconButton(
+            icon: const Icon(Icons.qr_code, size: 22),
+            tooltip: 'My QR Code',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ShareContactScreen()),
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined, size: 22),
