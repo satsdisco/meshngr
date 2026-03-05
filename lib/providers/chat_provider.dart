@@ -727,6 +727,7 @@ class ChatProvider extends ChangeNotifier {
     // Real BLE send
     if (_ble.isConnected) {
       final radioIdx = _getRadioChannelIdx(channelId);
+      debugPrint('SEND: channelId="$channelId" → radioIdx=$radioIdx (map: $_radioChannelMap)');
       try {
         await _ble.sendChannelMessage(radioIdx, text);
         // Message stays pending until radio confirms with Resp.sent (code=6)
@@ -751,15 +752,37 @@ class ChatProvider extends ChangeNotifier {
   int _getRadioChannelIdx(String channelId) {
     // Check reverse map first
     for (final entry in _radioChannelMap.entries) {
-      if (entry.value == channelId) return entry.key;
+      if (entry.value == channelId) {
+        debugPrint('Channel "$channelId" → radio idx ${entry.key} (from map)');
+        return entry.key;
+      }
     }
     // For 'radio_ch_N' IDs (from _handleChannelInfo)
     final match = RegExp(r'radio_ch_(\d+)').firstMatch(channelId);
-    if (match != null) return int.parse(match.group(1)!);
+    if (match != null) {
+      final idx = int.parse(match.group(1)!);
+      debugPrint('Channel "$channelId" → radio idx $idx (from ID pattern)');
+      return idx;
+    }
     // For 'ch_radio_N' IDs (from _handleIncomingChannelMsg)
     final match2 = RegExp(r'ch_radio_(\d+)').firstMatch(channelId);
-    if (match2 != null) return int.parse(match2.group(1)!);
-    // Default
+    if (match2 != null) {
+      final idx = int.parse(match2.group(1)!);
+      debugPrint('Channel "$channelId" → radio idx $idx (from ch_radio pattern)');
+      return idx;
+    }
+    // Try matching channel name to radio channels
+    final channel = _channels.firstWhere((c) => c.id == channelId, orElse: () => Channel(id: '', name: ''));
+    if (channel.name.isNotEmpty) {
+      for (final entry in _radioChannelMap.entries) {
+        final mapped = _channels.where((c) => c.id == entry.value).firstOrNull;
+        if (mapped != null && mapped.name == channel.name) {
+          debugPrint('Channel "$channelId" → radio idx ${entry.key} (name match: ${channel.name})');
+          return entry.key;
+        }
+      }
+    }
+    debugPrint('Channel "$channelId" → DEFAULT idx 0 (no match found! map=$_radioChannelMap)');
     return 0;
   }
 
