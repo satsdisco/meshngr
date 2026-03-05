@@ -79,6 +79,9 @@ class ChatProvider extends ChangeNotifier {
 
       case Resp.endOfContacts:
         _contactsSynced = true;
+        // Remove any channels not confirmed by the radio
+        final validIds = _radioChannelMap.values.toSet();
+        _channels.removeWhere((c) => !validIds.contains(c.id));
         _ble.requestBatteryInfo();
         _ble.syncNextMessage();
         notifyListeners();
@@ -732,7 +735,9 @@ class ChatProvider extends ChangeNotifier {
     // Real BLE send
     if (_ble.isConnected) {
       final radioIdx = _getRadioChannelIdx(channelId);
-      debugPrint('SEND: channelId="$channelId" → radioIdx=$radioIdx (map: $_radioChannelMap)');
+      debugPrint('SEND: channelId="$channelId" → radioIdx=$radioIdx');
+      debugPrint('  radioChannelMap=$_radioChannelMap');
+      debugPrint('  all channel IDs: ${_channels.map((c) => "${c.id}(${c.name})").toList()}');
       try {
         await _ble.sendChannelMessage(radioIdx, text);
         // Message stays pending until radio confirms with Resp.sent (code=6)
