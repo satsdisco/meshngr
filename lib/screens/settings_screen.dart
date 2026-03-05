@@ -6,6 +6,7 @@ import '../providers/chat_provider.dart';
 import '../widgets/connection_status.dart';
 import 'connection_screen.dart';
 import 'broadcast_screen.dart';
+import 'ble_debug_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -185,8 +186,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
 
               const SizedBox(height: 20),
+              _SectionHeader(title: 'DEBUG'),
+              _SettingsTile(
+                icon: Icons.bug_report,
+                title: 'BLE Debug Log',
+                subtitle: '${ble.debugLog.length} entries',
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BleDebugScreen())),
+              ),
+
+              const SizedBox(height: 20),
               _SectionHeader(title: 'ABOUT'),
-              _SettingsTile(icon: Icons.info_outline, title: 'meshngr', subtitle: 'v0.1.1'),
+              _SettingsTile(icon: Icons.info_outline, title: 'meshngr', subtitle: 'v0.4.1'),
               _SettingsTile(
                 icon: Icons.code,
                 title: 'Source Code',

@@ -24,6 +24,16 @@ class BleService extends ChangeNotifier {
   // Stream of parsed frames from the radio
   final _frameController = StreamController<ParsedFrame>.broadcast();
 
+  // Debug log for BLE activity (visible in settings)
+  final List<String> debugLog = [];
+  void _log(String msg) {
+    final ts = DateTime.now().toString().substring(11, 19);
+    debugLog.add('[$ts] $msg');
+    if (debugLog.length > 100) debugLog.removeAt(0);
+    debugPrint('BLE: $msg');
+    notifyListeners();
+  }
+
   // Cached device info
   DeviceSelfInfo? _selfInfo;
   DeviceBattStorage? _battInfo;
@@ -139,10 +149,13 @@ class BleService extends ChangeNotifier {
       _notifySub = _txChar!.onValueReceived.listen(_onDataReceived);
 
       _setState(BleConnectionState.connected);
+      _log('Connected! RX props: write=${_rxChar!.properties.write} writeNoResp=${_rxChar!.properties.writeWithoutResponse}');
+      _log('TX props: notify=${_txChar!.properties.notify} indicate=${_txChar!.properties.indicate}');
 
       // Match reference app init sequence:
       // 1. deviceQuery (triggers selfInfo response)
       // 2. appStart (handshake with app name + version)
+      _log('Sending deviceQuery + appStart');
       await sendFrame(buildDeviceQueryFrame());
       await sendFrame(buildAppStartFrame());
 
@@ -165,7 +178,7 @@ class BleService extends ChangeNotifier {
       await sendFrame(buildGetContactsFrame());
 
     } catch (e) {
-      debugPrint('BLE connect error: $e');
+      _log('CONNECT ERROR: $e');
       await _cleanup();
       _setState(BleConnectionState.disconnected);
     }
@@ -188,16 +201,16 @@ class BleService extends ChangeNotifier {
   /// Send a raw frame to the radio
   Future<void> sendFrame(Uint8List frame) async {
     if (_rxChar == null || !isConnected) {
-      debugPrint('BLE: Cannot send frame — not connected');
+      _log('TX BLOCKED: frame — not connected');
       return;
     }
     try {
-      debugPrint('BLE TX: code=${frame[0]} len=${frame.length}');
+      _log('TX: code=${frame[0]} len=${frame.length}');
       // Prefer writeWithoutResponse when supported (matches reference app)
       final canWriteWithout = _rxChar!.properties.writeWithoutResponse;
       await _rxChar!.write(frame.toList(), withoutResponse: canWriteWithout);
     } catch (e) {
-      debugPrint('BLE send error: $e');
+      _log('TX ERROR: $e');
     }
   }
 
@@ -255,33 +268,50 @@ class BleService extends ChangeNotifier {
 
     // Parse the frame
     final frame = Uint8List.fromList(data);
-    debugPrint('BLE RX: code=${frame[0]} len=${frame.length}');
+    _log('RX: code=${frame[0]} len=${frame.length}');
     try {
       final parsed = parseFrame(frame);
 
       // Cache device-level info
       if (parsed.code == Resp.selfInfo && parsed.data is DeviceSelfInfo) {
         _selfInfo = parsed.data as DeviceSelfInfo;
+        _log('Got selfInfo: name="${_selfInfo!.name}" key=${_selfInfo!.publicKeyHex.substring(0, 12)}...');
         notifyListeners();
       }
       if (parsed.code == Resp.battAndStorage && parsed.data is DeviceBattStorage) {
         _battInfo = parsed.data as DeviceBattStorage;
+        _log('Battery: ${_battInfo!.batteryPercent}%');
         notifyListeners();
+      }
+      if (parsed.code == Resp.sent) {
+        _log('Radio ACK: message accepted for TX');
+      }
+      if (parsed.code == Resp.ok) {
+        _log('Radio OK (generic ACK)');
+      }
+      if (parsed.code == Resp.contact && parsed.data is DeviceContact) {
+        final dc = parsed.data as DeviceContact;
+        _log('Contact: "${dc.name}" type=${dc.advType}');
+      }
+      if (parsed.code == Resp.channelInfo && parsed.data is DeviceChannel) {
+        final ch = parsed.data as DeviceChannel;
+        _log('Channel[${ch.index}]: "${ch.name}"');
       }
 
       _frameController.add(parsed);
 
       // If there are messages waiting, sync them
       if (parsed.code == Push.msgWaiting) {
+        _log('Messages waiting — syncing');
         syncNextMessage();
       }
     } catch (e) {
-      debugPrint('Frame parse error: $e');
+      _log('PARSE ERROR: $e');
     }
   }
 
   void _handleDisconnection() {
-    debugPrint('BLE: Device disconnected');
+    _log('DISCONNECTED');
     _selfInfo = null;
     _battInfo = null;
     _cleanup();
@@ -290,7 +320,7 @@ class BleService extends ChangeNotifier {
     // Auto-reconnect after 3 seconds (unless manual disconnect)
     if (!_manualDisconnect) {
       _reconnectTimer = Timer(const Duration(seconds: 3), () {
-        debugPrint('BLE: Attempting auto-reconnect...');
+        _log('RECONNECTING...');
         reconnect();
       });
     }
