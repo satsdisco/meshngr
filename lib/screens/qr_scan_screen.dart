@@ -70,10 +70,27 @@ class _QrScanScreenState extends State<QrScanScreen> {
       address = raw.substring(0, 64);
     }
 
-    if (address == null || address.length != 64) {
+    // Also try raw bytes (some QR generators encode binary)
+    if (address == null && barcode.rawBytes != null && barcode.rawBytes!.length >= 32) {
+      final bytes = barcode.rawBytes!;
+      address = bytes.sublist(0, 32).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+      if (bytes.length > 99) {
+        final nameBytes = bytes.sublist(99);
+        final nullIdx = nameBytes.indexOf(0);
+        final trimmed = nullIdx >= 0 ? nameBytes.sublist(0, nullIdx) : nameBytes;
+        if (trimmed.isNotEmpty) name = String.fromCharCodes(trimmed);
+      }
+    }
+
+    if (address == null || address.length < 64) {
+      final preview = raw.length > 80 ? '${raw.substring(0, 80)}...' : raw;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Invalid QR code — not a mesh contact\nData: ${raw.substring(0, raw.length.clamp(0, 50))}...')),
+        SnackBar(
+          content: Text('QR not recognized\n$preview'),
+          duration: const Duration(seconds: 5),
+        ),
       );
+      setState(() => _scanned = false);
       return;
     }
 
