@@ -891,10 +891,7 @@ class ChatProvider extends ChangeNotifier {
   Future<void> initialize() async {
     final db = await _db;
 
-    // Wipe mock data from previous builds (v1 → v2 migration)
-    await db.deleteAll();
-
-    // Load persisted real data (will be empty on fresh install — that's correct)
+    // Load persisted real data
     final allContacts = await db.getAllContacts();
     _myContacts = allContacts.where((c) => c.trustLevel == TrustLevel.saved || c.trustLevel == TrustLevel.favorite).toList();
     _knownNodes = allContacts.where((c) => c.trustLevel == TrustLevel.unknown).toList();
