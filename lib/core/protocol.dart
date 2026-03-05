@@ -175,6 +175,15 @@ Uint8List buildSetAdvertNameFrame(String name) {
 }
 
 /// Sync next pending message from device
+/// Import a contact from hex-encoded contact frame
+/// Format: [cmd][contact_frame_bytes...]
+Uint8List buildImportContactFrame(String contactFrameHex) {
+  final w = BufferWriter();
+  w.writeByte(Cmd.importContact);
+  w.writeHex(contactFrameHex);
+  return w.toBytes();
+}
+
 Uint8List buildSyncNextMessageFrame() {
   return Uint8List.fromList([Cmd.syncNextMessage]);
 }

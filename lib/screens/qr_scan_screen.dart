@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../models/contact.dart';
 import '../providers/chat_provider.dart';
+import '../core/ble_service.dart';
+import '../core/protocol.dart';
 
 class QrScanScreen extends StatefulWidget {
   const QrScanScreen({super.key});
@@ -29,29 +31,48 @@ class _QrScanScreenState extends State<QrScanScreen> {
 
     final raw = barcode.rawValue!;
     // Supported formats:
-    // 1. meshcore://contact?key=HEX&name=NAME (our QR format)
-    // 2. meshngr:ADDRESS:NAME
+    // 1. meshcore://<hex> (ref app export format — contact frame as hex)
+    // 2. meshcore://contact?key=HEX&name=NAME (our URL format)
     // 3. Raw 64-char hex address
     String? address;
     String? name;
+    String? rawContactHex; // Full contact frame hex for radio import
 
-    if (raw.startsWith('meshcore://contact')) {
+    if (raw.startsWith('meshcore://contact?')) {
       final uri = Uri.tryParse(raw);
       if (uri != null) {
         address = uri.queryParameters['key'];
         name = uri.queryParameters['name'];
       }
-    } else if (raw.startsWith('meshngr:')) {
-      final parts = raw.split(':');
-      if (parts.length >= 2) address = parts[1];
-      if (parts.length >= 3) name = parts.sublist(2).join(':');
-    } else if (RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(raw)) {
-      address = raw;
+    } else if (raw.startsWith('meshcore://')) {
+      // Reference app format: meshcore:// + hex-encoded contact frame
+      // Contact frame: [pubkey x32][adv_type][flags][pathLen][path x64][name x32][timestamp x4][lat x4][lon x4][lastmod x4]
+      final hex = raw.substring('meshcore://'.length).trim();
+      if (hex.length >= 64) {
+        rawContactHex = hex;
+        // First 32 bytes (64 hex chars) = public key
+        address = hex.substring(0, 64);
+        // Name is at byte offset 99 (hex offset 198), 32 bytes max
+        if (hex.length >= 198 + 2) {
+          final nameHex = hex.substring(198, (198 + 64).clamp(0, hex.length));
+          final nameBytes = <int>[];
+          for (int i = 0; i < nameHex.length - 1; i += 2) {
+            final b = int.tryParse(nameHex.substring(i, i + 2), radix: 16) ?? 0;
+            if (b == 0) break;
+            nameBytes.add(b);
+          }
+          if (nameBytes.isNotEmpty) {
+            name = String.fromCharCodes(nameBytes);
+          }
+        }
+      }
+    } else if (RegExp(r'^[0-9a-fA-F]{64,}$').hasMatch(raw)) {
+      address = raw.substring(0, 64);
     }
 
     if (address == null || address.length != 64) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid QR code — not a mesh contact')),
+        SnackBar(content: Text('Invalid QR code — not a mesh contact\nData: ${raw.substring(0, raw.length.clamp(0, 50))}...')),
       );
       return;
     }
@@ -86,6 +107,13 @@ class _QrScanScreenState extends State<QrScanScreen> {
                 lastSeen: DateTime.now(),
               );
               context.read<ChatProvider>().addContact(contact, alias: name);
+              // Import to radio if we have the full contact frame
+              if (rawContactHex != null) {
+                final ble = context.read<BleService>();
+                if (ble.isConnected) {
+                  ble.sendFrame(buildImportContactFrame(rawContactHex!));
+                }
+              }
               Navigator.pop(ctx);
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
