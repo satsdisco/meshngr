@@ -934,7 +934,10 @@ class ChatProvider extends ChangeNotifier {
   void clearKnownNodes() {
     _knownNodes.clear();
     notifyListeners();
-    // They'll repopulate on next contact sync from radio
+    // Re-sync contacts from radio
+    if (_ble.isConnected) {
+      _ble.sendFrame(buildGetContactsFrame());
+    }
   }
 
   Future<void> clearAllData() async {
