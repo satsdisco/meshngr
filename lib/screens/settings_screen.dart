@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../core/ble_service.dart';
+import '../providers/chat_provider.dart';
 import '../widgets/connection_status.dart';
 import 'connection_screen.dart';
 import 'broadcast_screen.dart';
@@ -89,6 +90,26 @@ class SettingsScreen extends StatelessWidget {
 
               const SizedBox(height: 20),
               _SectionHeader(title: 'APP'),
+              Consumer<ChatProvider>(
+                builder: (context, chat, _) => _SettingsTile(
+                  icon: Icons.science_outlined,
+                  title: 'Demo Mode',
+                  subtitle: chat.demoMode
+                      ? 'On — showing simulated data'
+                      : 'Off — real radio data only',
+                  trailing: Switch(
+                    value: chat.demoMode,
+                    onChanged: (val) {
+                      if (val) {
+                        chat.enableDemoMode();
+                      } else {
+                        chat.disableDemoMode();
+                      }
+                    },
+                    activeColor: AppColors.accent,
+                  ),
+                ),
+              ),
               _SettingsTile(
                   icon: Icons.notifications_outlined,
                   title: 'Notifications',

@@ -83,6 +83,14 @@ class AppDatabase {
 
   // ── Contacts ──────────────────────────────────────────────────────────────
 
+  /// Wipe all data (used for migration from mock-seeded builds)
+  Future<void> deleteAll() async {
+    final db = await _database;
+    await db.delete('messages');
+    await db.delete('contacts');
+    await db.delete('channels');
+  }
+
   Future<bool> hasContacts() async {
     final db = await _database;
     final result = await db.rawQuery('SELECT COUNT(*) as count FROM contacts');

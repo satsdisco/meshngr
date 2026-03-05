@@ -12,15 +12,16 @@ import '../core/protocol.dart';
 class ChatProvider extends ChangeNotifier {
   final BleService _ble;
 
-  List<Contact> _savedContacts = List.from(MockData.savedContacts);
-  final List<Contact> _nearbyNodes = List.from(MockData.nearbyNodes);
-  List<Channel> _channels = List.from(MockData.channels);
-  final Map<String, List<Message>> _conversations =
-      Map.from(MockData.conversations);
-  final Map<String, List<Message>> _channelConversations =
-      Map.from(MockData.channelConversations);
+  List<Contact> _savedContacts = [];
+  final List<Contact> _nearbyNodes = [];
+  List<Channel> _channels = [];
+  final Map<String, List<Message>> _conversations = {};
+  final Map<String, List<Message>> _channelConversations = {};
   final Map<String, bool> _typingContacts = {};
   bool _isScanning = false;
+  bool _demoMode = false;
+
+  bool get demoMode => _demoMode;
 
   // Radio channel index → channel ID mapping
   final Map<int, String> _radioChannelMap = {};
@@ -425,41 +426,58 @@ class ChatProvider extends ChangeNotifier {
       return;
     }
 
-    // Mock/simulation fallback (no BLE)
-    Future.delayed(const Duration(milliseconds: 300), () {
-      _updateMessageStatus(contactId, msg.id, DeliveryStatus.sent);
-    });
-
-    final isOnline = contact?.isOnline ?? false;
-
-    if (isOnline) {
-      final hops = contact?.hopCount ?? 1;
-      final delayMs = 800 + (hops * 400) + Random().nextInt(500);
-      Future.delayed(Duration(milliseconds: delayMs), () {
-        _updateMessageStatus(
-          contactId,
-          msg.id,
-          DeliveryStatus.delivered,
-          route: MessageRoute(
-            hopCount: hops,
-            rssi: -(40 + Random().nextInt(30)),
-          ),
-        );
-        _simulateTypingAndReply(contactId);
+    // No BLE connected
+    if (_demoMode) {
+      // Demo simulation fallback
+      Future.delayed(const Duration(milliseconds: 300), () {
+        _updateMessageStatus(contactId, msg.id, DeliveryStatus.sent);
       });
+
+      final isOnline = contact?.isOnline ?? false;
+
+      if (isOnline) {
+        final hops = contact?.hopCount ?? 1;
+        final delayMs = 800 + (hops * 400) + Random().nextInt(500);
+        Future.delayed(Duration(milliseconds: delayMs), () {
+          _updateMessageStatus(
+            contactId,
+            msg.id,
+            DeliveryStatus.delivered,
+            route: MessageRoute(
+              hopCount: hops,
+              rssi: -(40 + Random().nextInt(30)),
+            ),
+          );
+          _simulateTypingAndReply(contactId);
+        });
+      } else {
+        Future.delayed(const Duration(seconds: 5), () {
+          final msgs = _conversations[contactId];
+          if (msgs == null) return;
+          final idx = msgs.indexWhere((m) => m.id == msg.id);
+          if (idx != -1 && msgs[idx].status == DeliveryStatus.sent) {
+            _conversations[contactId]![idx] = msgs[idx].copyWith(
+              status: DeliveryStatus.failed,
+              failReason: 'Node unreachable',
+            );
+            notifyListeners();
+            _db.then((db) =>
+                db.upsertMessage(_conversations[contactId]![idx], contactId: contactId));
+          }
+        });
+      }
     } else {
-      Future.delayed(const Duration(seconds: 5), () {
+      // Real mode, no BLE — mark as failed immediately
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _updateMessageStatus(contactId, msg.id, DeliveryStatus.failed);
         final msgs = _conversations[contactId];
         if (msgs == null) return;
         final idx = msgs.indexWhere((m) => m.id == msg.id);
-        if (idx != -1 && msgs[idx].status == DeliveryStatus.sent) {
+        if (idx != -1) {
           _conversations[contactId]![idx] = msgs[idx].copyWith(
-            status: DeliveryStatus.failed,
-            failReason: 'Node unreachable',
+            failReason: 'Radio not connected',
           );
           notifyListeners();
-          _db.then((db) =>
-              db.upsertMessage(_conversations[contactId]![idx], contactId: contactId));
         }
       });
     }
@@ -519,36 +537,43 @@ class ChatProvider extends ChangeNotifier {
       return;
     }
 
-    Future.delayed(const Duration(milliseconds: 400), () {
-      _updateMessageStatus(contactId, messageId, DeliveryStatus.sent);
-    });
-
-    if (contact?.isOnline ?? false) {
-      Future.delayed(Duration(milliseconds: 1200 + Random().nextInt(800)), () {
-        _updateMessageStatus(
-          contactId,
-          messageId,
-          DeliveryStatus.delivered,
-          route: MessageRoute(hopCount: contact!.hopCount),
-        );
+    if (_demoMode) {
+      Future.delayed(const Duration(milliseconds: 400), () {
+        _updateMessageStatus(contactId, messageId, DeliveryStatus.sent);
       });
-    } else {
-      Future.delayed(const Duration(seconds: 4), () {
-        final currentMsgs = _conversations[contactId];
-        if (currentMsgs == null) return;
-        final currentIdx = currentMsgs.indexWhere((m) => m.id == messageId);
-        if (currentIdx != -1 &&
-            currentMsgs[currentIdx].status == DeliveryStatus.sent) {
-          _conversations[contactId]![currentIdx] =
-              currentMsgs[currentIdx].copyWith(
-            status: DeliveryStatus.failed,
-            failReason: 'Node still unreachable',
+
+      if (contact?.isOnline ?? false) {
+        Future.delayed(Duration(milliseconds: 1200 + Random().nextInt(800)), () {
+          _updateMessageStatus(
+            contactId,
+            messageId,
+            DeliveryStatus.delivered,
+            route: MessageRoute(hopCount: contact!.hopCount),
           );
-          notifyListeners();
-          _db.then((db) => db.upsertMessage(
-              _conversations[contactId]![currentIdx],
-              contactId: contactId));
-        }
+        });
+      } else {
+        Future.delayed(const Duration(seconds: 4), () {
+          final currentMsgs = _conversations[contactId];
+          if (currentMsgs == null) return;
+          final currentIdx = currentMsgs.indexWhere((m) => m.id == messageId);
+          if (currentIdx != -1 &&
+              currentMsgs[currentIdx].status == DeliveryStatus.sent) {
+            _conversations[contactId]![currentIdx] =
+                currentMsgs[currentIdx].copyWith(
+              status: DeliveryStatus.failed,
+              failReason: 'Node still unreachable',
+            );
+            notifyListeners();
+            _db.then((db) => db.upsertMessage(
+                _conversations[contactId]![currentIdx],
+                contactId: contactId));
+          }
+        });
+      }
+    } else {
+      // Real mode, no BLE — fail immediately
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _updateMessageStatus(contactId, messageId, DeliveryStatus.failed);
       });
     }
   }
@@ -722,49 +747,58 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Demo mode ──────────────────────────────────────────────────────────────
+
+  void enableDemoMode() {
+    _demoMode = true;
+    _savedContacts = List.from(MockData.savedContacts);
+    _nearbyNodes.clear();
+    _nearbyNodes.addAll(MockData.nearbyNodes);
+    _channels = List.from(MockData.channels);
+    _conversations.clear();
+    _conversations.addAll(Map.from(MockData.conversations));
+    _channelConversations.clear();
+    _channelConversations.addAll(Map.from(MockData.channelConversations));
+    notifyListeners();
+  }
+
+  void disableDemoMode() {
+    _demoMode = false;
+    _savedContacts.clear();
+    _nearbyNodes.clear();
+    _channels.clear();
+    _conversations.clear();
+    _channelConversations.clear();
+    notifyListeners();
+    // Reload from DB (real data only)
+    initialize();
+  }
+
   // ── DB initialization ─────────────────────────────────────────────────────
 
   Future<void> initialize() async {
     final db = await _db;
-    final hasData = await db.hasContacts();
 
-    if (!hasData) {
-      // First run: seed DB from mock data
-      for (final contact in _savedContacts) {
-        await db.insertContact(contact);
-      }
-      for (final channel in _channels) {
-        await db.insertChannel(channel);
-      }
-      for (final entry in _conversations.entries) {
-        for (final msg in entry.value) {
-          await db.upsertMessage(msg, contactId: entry.key);
-        }
-      }
-      for (final entry in _channelConversations.entries) {
-        for (final msg in entry.value) {
-          await db.upsertMessage(msg, channelId: entry.key);
-        }
-      }
-    } else {
-      // Subsequent runs: load persisted data
-      _savedContacts = await db.getAllContacts();
-      _channels = await db.getAllChannels();
+    // Wipe mock data from previous builds (v1 → v2 migration)
+    await db.deleteAll();
 
-      _conversations.clear();
-      for (final contact in _savedContacts) {
-        final msgs = await db.getMessagesForContact(contact.id);
-        if (msgs.isNotEmpty) _conversations[contact.id] = msgs;
-      }
+    // Load persisted real data (will be empty on fresh install — that's correct)
+    _savedContacts = await db.getAllContacts();
+    _channels = await db.getAllChannels();
 
-      _channelConversations.clear();
-      for (final channel in _channels) {
-        final msgs = await db.getMessagesForChannel(channel.id);
-        if (msgs.isNotEmpty) _channelConversations[channel.id] = msgs;
-      }
-
-      notifyListeners();
+    _conversations.clear();
+    for (final contact in _savedContacts) {
+      final msgs = await db.getMessagesForContact(contact.id);
+      if (msgs.isNotEmpty) _conversations[contact.id] = msgs;
     }
+
+    _channelConversations.clear();
+    for (final channel in _channels) {
+      final msgs = await db.getMessagesForChannel(channel.id);
+      if (msgs.isNotEmpty) _channelConversations[channel.id] = msgs;
+    }
+
+    notifyListeners();
   }
 
   @override

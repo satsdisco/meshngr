@@ -152,7 +152,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Tap the + button to scan for\nnearby mesh nodes and add them\nas contacts',
+              'Connect your radio to sync contacts.\nNearby nodes will appear when your\nradio discovers them.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textTertiary, height: 1.5),
             ),

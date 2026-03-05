@@ -23,6 +23,36 @@ class ChannelsScreen extends StatelessWidget {
         final joined = cp.joinedChannels;
         final available = cp.availableChannels;
 
+        if (joined.isEmpty && available.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(40),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: const BoxDecoration(
+                      color: AppColors.surface,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.tag, size: 36, color: AppColors.textTertiary.withValues(alpha: 0.5)),
+                  ),
+                  const SizedBox(height: 20),
+                  Text('No channels yet', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary)),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Channels from your radio will\nappear here when connected.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textTertiary),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
         return ListView(
           padding: const EdgeInsets.symmetric(vertical: 8),
           children: [

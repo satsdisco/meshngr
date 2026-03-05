@@ -31,10 +31,10 @@ class ChatsScreen extends StatelessWidget {
                     child: Icon(Icons.chat_bubble_outline, size: 36, color: AppColors.textTertiary.withValues(alpha: 0.5)),
                   ),
                   const SizedBox(height: 20),
-                  Text('No conversations yet', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary)),
+                  Text('No messages yet', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary)),
                   const SizedBox(height: 8),
                   Text(
-                    'Add a contact from Nearby nodes\nand start messaging',
+                    'Connect your radio and start chatting.\nContacts from your mesh will appear here.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textTertiary),
                   ),
