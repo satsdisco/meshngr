@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../models/broadcast.dart';
+import '../core/ble_service.dart';
 
 class BroadcastScreen extends StatefulWidget {
   const BroadcastScreen({super.key});
@@ -16,12 +18,25 @@ class _BroadcastScreenState extends State<BroadcastScreen> {
 
   void _sendAdvert() async {
     setState(() => _isBroadcasting = true);
-    // TODO: actual BLE call — connector.sendSelfAdvert(flood: _selectedAdvert == AdvertType.flood)
-    await Future.delayed(const Duration(seconds: 1));
+
+    final ble = context.read<BleService>();
+    if (ble.isConnected) {
+      await ble.sendAdvert(flood: _selectedAdvert == AdvertType.flood);
+    }
+
+    // Brief delay for visual feedback
+    await Future.delayed(const Duration(milliseconds: 800));
     setState(() => _isBroadcasting = false);
+
     if (mounted) {
+      final connected = ble.isConnected;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You\'re now visible on the mesh ✓')),
+        SnackBar(
+          content: Text(connected
+              ? 'You\'re now visible on the mesh ✓'
+              : 'Radio not connected — connect first'),
+          backgroundColor: connected ? null : AppColors.error,
+        ),
       );
     }
   }

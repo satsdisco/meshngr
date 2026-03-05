@@ -7,8 +7,15 @@ import '../widgets/connection_status.dart';
 import 'connection_screen.dart';
 import 'broadcast_screen.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _notificationsEnabled = true;
 
   String _statusText(BleService ble) {
     switch (ble.state) {
@@ -21,6 +28,60 @@ class SettingsScreen extends StatelessWidget {
       case BleConnectionState.connected:
         return 'Connected to ${ble.deviceName ?? "device"}';
     }
+  }
+
+  void _editDisplayName(BuildContext context, BleService ble) {
+    final controller = TextEditingController(text: ble.selfInfo?.name ?? '');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Display Name'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: AppColors.textPrimary),
+          decoration: InputDecoration(
+            hintText: 'Enter your name',
+            hintStyle: const TextStyle(color: AppColors.textTertiary),
+            filled: true,
+            fillColor: AppColors.surfaceLight,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide.none,
+            ),
+          ),
+          maxLength: 20,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final name = controller.text.trim();
+              if (name.isNotEmpty && ble.isConnected) {
+                ble.setName(name);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Name updated to "$name"')),
+                );
+              } else if (!ble.isConnected) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Connect your radio first'),
+                    backgroundColor: AppColors.error,
+                  ),
+                );
+              }
+              Navigator.pop(ctx);
+            },
+            style: FilledButton.styleFrom(backgroundColor: AppColors.accent),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -69,6 +130,8 @@ class SettingsScreen extends StatelessWidget {
                 title: 'Display Name',
                 subtitle: selfInfo?.name ??
                     (ble.isConnected ? ble.deviceName ?? 'Unknown' : 'Not connected'),
+                onTap: () => _editDisplayName(context, ble),
+                trailing: const Icon(Icons.edit_outlined, color: AppColors.textTertiary, size: 18),
               ),
               _SettingsTile(
                 icon: Icons.fingerprint,
@@ -111,15 +174,24 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
               _SettingsTile(
-                  icon: Icons.notifications_outlined,
-                  title: 'Notifications',
-                  subtitle: 'Enabled'),
-              _SettingsTile(
-                  icon: Icons.palette_outlined, title: 'Appearance', subtitle: 'Dark'),
+                icon: Icons.notifications_outlined,
+                title: 'Notifications',
+                subtitle: _notificationsEnabled ? 'Enabled' : 'Disabled',
+                trailing: Switch(
+                  value: _notificationsEnabled,
+                  onChanged: (val) => setState(() => _notificationsEnabled = val),
+                  activeColor: AppColors.accent,
+                ),
+              ),
 
               const SizedBox(height: 20),
               _SectionHeader(title: 'ABOUT'),
-              _SettingsTile(icon: Icons.info_outline, title: 'meshngr', subtitle: 'v1.0.0'),
+              _SettingsTile(icon: Icons.info_outline, title: 'meshngr', subtitle: 'v0.1.1'),
+              _SettingsTile(
+                icon: Icons.code,
+                title: 'Source Code',
+                subtitle: 'github.com/satsdisco/meshngr',
+              ),
             ],
           );
         },
@@ -188,7 +260,7 @@ class _SettingsTile extends StatelessWidget {
                 ],
               ),
             ),
-            ?trailing,
+            if (trailing != null) trailing!,
           ],
         ),
       ),
