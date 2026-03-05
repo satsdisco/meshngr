@@ -194,6 +194,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BleDebugScreen())),
               ),
 
+              _SettingsTile(
+                icon: Icons.delete_forever,
+                title: 'Clear All Data',
+                subtitle: 'Wipe local DB — channels reload from radio',
+                onTap: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Clear All Data?'),
+                      content: const Text('This removes all local data. Channels and contacts will reload from the radio.'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear')),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true && context.mounted) {
+                    await context.read<ChatProvider>().clearAllData();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Data cleared — reconnect to reload')));
+                    }
+                  }
+                },
+              ),
+
               const SizedBox(height: 20),
               _SectionHeader(title: 'ABOUT'),
               _SettingsTile(icon: Icons.info_outline, title: 'meshngr', subtitle: 'v0.4.1'),

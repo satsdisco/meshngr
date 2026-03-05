@@ -113,8 +113,13 @@ class ChatProvider extends ChangeNotifier {
         }
         break;
 
+      case Resp.ok:
+        // For channel messages, OK = sent confirmation
+        _handleRadioSent();
+        break;
+
       case Resp.sent:
-        // Radio confirmed message was transmitted over the air
+        // DM sent confirmation (includes ack hash for repeat tracking)
         _handleRadioSent();
         break;
 
@@ -918,6 +923,19 @@ class ChatProvider extends ChangeNotifier {
     _conversations.addAll(Map.from(MockData.conversations));
     _channelConversations.clear();
     _channelConversations.addAll(Map.from(MockData.channelConversations));
+    notifyListeners();
+  }
+
+  Future<void> clearAllData() async {
+    final db = await _db;
+    await db.deleteAll();
+    _myContacts.clear();
+    _knownNodes.clear();
+    _nearbyNodes.clear();
+    _channels.clear();
+    _conversations.clear();
+    _channelConversations.clear();
+    _radioChannelMap.clear();
     notifyListeners();
   }
 
