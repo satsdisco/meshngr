@@ -113,14 +113,6 @@ class _WelcomePage extends StatelessWidget {
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppColors.accent,
-                  AppColors.accent.withValues(alpha: 0.6),
-                ],
-              ),
               borderRadius: BorderRadius.circular(30),
               boxShadow: [
                 BoxShadow(
@@ -130,7 +122,10 @@ class _WelcomePage extends StatelessWidget {
                 ),
               ],
             ),
-            child: const Icon(Icons.cell_tower, size: 56, color: Colors.white),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(30),
+              child: Image.asset('assets/images/logo.png', fit: BoxFit.cover),
+            ),
           ),
           const SizedBox(height: 40),
           Text(
