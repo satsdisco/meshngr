@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../theme/app_theme.dart';
 import '../core/ble_service.dart';
+import 'qr_scan_screen.dart';
 
 /// Shows your QR code so others can scan and add you as a contact
 class ShareContactScreen extends StatelessWidget {
@@ -12,7 +13,16 @@ class ShareContactScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('My QR Code')),
+      appBar: AppBar(
+        title: const Text('My QR Code'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner),
+            tooltip: 'Scan QR',
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const QrScanScreen())),
+          ),
+        ],
+      ),
       body: Consumer<BleService>(
         builder: (context, ble, _) {
           final selfInfo = ble.selfInfo;

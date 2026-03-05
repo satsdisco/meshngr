@@ -517,55 +517,120 @@ ParsedFrame _parseContact(BufferReader r, int code) {
 }
 
 ParsedFrame _parseContactMsg(BufferReader r, int code) {
-  if (r.remaining < pubKeySize + 5) return ParsedFrame(code);
+  // Use fixed offsets matching reference app
+  // After response code (already consumed):
+  // Non-V3: [0-31]=pubkey [32-35]=timestamp [36]=flags/txtType [37+]=text
+  // V3: [0-31]=pubkey [32]=pathLen [33]=flags [path...] [snr] [timestamp x4] [txtType] [text...]
+  final data = r.readBytes(r.remaining);
+  if (data.length < pubKeySize + 5) return ParsedFrame(code);
 
-  final senderKey = r.readBytes(pubKeySize);
+  final senderKey = Uint8List.fromList(data.sublist(0, pubKeySize));
   final isV3 = code == Resp.contactMsgRecvV3;
 
   int hopCount = 0;
-  bool isFlood = false;
   int? snr;
+  int timestamp;
+  String text;
 
-  if (isV3 && r.remaining >= 2) {
-    final pathLen = r.readUInt8();
-    final flags = r.readUInt8();
-    isFlood = (flags & 0x01) != 0;
-    hopCount = pathLen;
-    if (r.remaining >= 1) snr = r.readInt8();
+  if (isV3) {
+    final pathLen = data[32] > 127 ? data[32] - 256 : data[32];
+    hopCount = pathLen > 0 ? pathLen : 0;
+    var cursor = 33;
+    final flags = data[cursor++];
+    if (hopCount > 0 && data.length >= cursor + hopCount) {
+      cursor += hopCount; // skip path bytes
+    }
+    if (cursor < data.length) {
+      snr = data[cursor] > 127 ? data[cursor] - 256 : data[cursor];
+      cursor++;
+    }
+    timestamp = cursor + 3 < data.length
+        ? data[cursor] | (data[cursor + 1] << 8) | (data[cursor + 2] << 16) | (data[cursor + 3] << 24)
+        : 0;
+    cursor += 4;
+    if (cursor < data.length) cursor++; // txtType
+    final textBytes = cursor < data.length ? data.sublist(cursor) : <int>[];
+    final nullIdx = textBytes.indexOf(0);
+    final trimmed = nullIdx >= 0 ? textBytes.sublist(0, nullIdx) : textBytes;
+    try {
+      text = utf8.decode(Uint8List.fromList(trimmed), allowMalformed: true);
+    } catch (_) {
+      text = String.fromCharCodes(trimmed);
+    }
+  } else {
+    timestamp = data[32] | (data[33] << 8) | (data[34] << 16) | (data[35] << 24);
+    // data[36] = flags/txtType
+    final textBytes = data.length > 37 ? data.sublist(37) : <int>[];
+    final nullIdx = textBytes.indexOf(0);
+    final trimmed = nullIdx >= 0 ? textBytes.sublist(0, nullIdx) : textBytes;
+    try {
+      text = utf8.decode(Uint8List.fromList(trimmed), allowMalformed: true);
+    } catch (_) {
+      text = String.fromCharCodes(trimmed);
+    }
   }
-
-  final timestamp = r.remaining >= 4 ? r.readUInt32LE() : 0;
-  final text = r.remaining > 0 ? r.readString() : '';
 
   return ParsedFrame(code, IncomingMessage(
     senderKeyHex: _bytesToHex(senderKey),
     text: text,
     timestamp: timestamp,
     hopCount: hopCount,
-    isFlood: isFlood,
+    isFlood: false,
     snr: snr,
   ));
 }
 
 ParsedFrame _parseChannelMsg(BufferReader r, int code) {
-  if (r.remaining < 2) return ParsedFrame(code);
+  // Use raw bytes with fixed offsets (like reference app)
+  // Response code already consumed, so data starts at byte 1 of original frame
+  final data = r.readBytes(r.remaining);
+  if (data.length < 7) return ParsedFrame(code);
 
   final isV3 = code == Resp.channelMsgRecvV3;
-  final channelIdx = r.readUInt8();
-
+  int channelIdx;
   int hopCount = 0;
-  bool isFlood = false;
+  int timestampOffset, textOffset;
 
-  if (isV3 && r.remaining >= 2) {
-    final pathLen = r.readUInt8();
-    final flags = r.readUInt8();
-    isFlood = (flags & 0x01) != 0;
-    hopCount = pathLen;
-    if (r.remaining >= 1) r.readInt8(); // snr
+  if (isV3) {
+    // V3: [0]=SNR [1]=rsv1 [2]=rsv2 [3]=channel_idx [4]=path_len [path...] [txt_type] [timestamp x4] [text...]
+    channelIdx = data[3];
+    final pathLen = data[4] > 127 ? data[4] - 256 : data[4];
+    var cursor = 5;
+    final hasPathFlag = (data[1] & 0x01) != 0;
+    final safePathLen = pathLen > 0 ? pathLen : 0;
+    final canFitPath = safePathLen > 0 && data.length >= cursor + safePathLen + 5;
+    final hasValidTxtType = cursor < data.length && (data[cursor] == 0 || data[cursor] == 5);
+    if ((hasPathFlag || (canFitPath && !hasValidTxtType)) && canFitPath) {
+      cursor += safePathLen;
+    }
+    hopCount = safePathLen;
+    cursor += 1; // txt_type
+    timestampOffset = cursor;
+    textOffset = cursor + 4;
+  } else {
+    // Non-V3: [0]=channel_idx [1]=path_len [2]=txt_type [3-6]=timestamp [7+]=text
+    channelIdx = data[0];
+    hopCount = data[1] > 127 ? data[1] - 256 : data[1];
+    // data[2] = txt_type (should be 0 for plain)
+    timestampOffset = 3;
+    textOffset = 7;
   }
 
-  final timestamp = r.remaining >= 4 ? r.readUInt32LE() : 0;
-  final fullText = r.remaining > 0 ? r.readString() : '';
+  if (data.length < textOffset + 1) return ParsedFrame(code);
+
+  final timestamp = data[timestampOffset] | (data[timestampOffset + 1] << 8) | 
+                    (data[timestampOffset + 2] << 16) | (data[timestampOffset + 3] << 24);
+  
+  // Read null-terminated text
+  final textBytes = data.sublist(textOffset);
+  final nullIdx = textBytes.indexOf(0);
+  final trimmed = nullIdx >= 0 ? textBytes.sublist(0, nullIdx) : textBytes;
+  String fullText;
+  try {
+    fullText = utf8.decode(Uint8List.fromList(trimmed), allowMalformed: true);
+  } catch (_) {
+    fullText = String.fromCharCodes(trimmed);
+  }
 
   // Channel messages are formatted as "SenderName: message"
   String senderName = 'Unknown';
@@ -582,7 +647,7 @@ ParsedFrame _parseChannelMsg(BufferReader r, int code) {
     text: text,
     timestamp: timestamp,
     hopCount: hopCount,
-    isFlood: isFlood,
+    isFlood: false,
   ));
 }
 

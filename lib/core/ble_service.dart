@@ -306,6 +306,28 @@ class BleService extends ChangeNotifier {
         final ch = parsed.data as DeviceChannel;
         _log('Channel[${ch.index}]: "${ch.name}"');
       }
+      if ((parsed.code == Resp.contactMsgRecv || parsed.code == Resp.contactMsgRecvV3)) {
+        if (parsed.data is IncomingMessage) {
+          final im = parsed.data as IncomingMessage;
+          _log('📩 DM from ${im.senderKeyHex.substring(0, 8)}: "${im.text}"');
+        } else {
+          _log('⚠️ DM parse failed (code=${parsed.code}, data=${parsed.data})');
+        }
+      }
+      if ((parsed.code == Resp.channelMsgRecv || parsed.code == Resp.channelMsgRecvV3)) {
+        if (parsed.data is IncomingChannelMessage) {
+          final cm = parsed.data as IncomingChannelMessage;
+          _log('📩 Ch[${cm.channelIdx}] ${cm.senderName}: "${cm.text}"');
+        } else {
+          _log('⚠️ Channel msg parse failed (code=${parsed.code}, data=${parsed.data})');
+        }
+      }
+      if (parsed.code == Resp.endOfContacts) {
+        _log('End of contacts — starting message sync');
+      }
+      if (parsed.code == Resp.noMoreMessages) {
+        _log('No more queued messages');
+      }
 
       _frameController.add(parsed);
 
