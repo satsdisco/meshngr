@@ -268,9 +268,14 @@ class _ChannelTile extends StatelessWidget {
                   const SizedBox(height: 3),
                   Row(
                     children: [
-                      Text(
-                        '${channel.memberCount} members',
-                        style: Theme.of(context).textTheme.bodySmall,
+                      Consumer<ChatProvider>(
+                        builder: (context, cp, _) {
+                          final active = cp.getChannelActiveMemberCount(channel.id);
+                          return Text(
+                            active > 0 ? '$active active' : 'No activity yet',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          );
+                        },
                       ),
                       if (channel.lastMessage != null) ...[
                         const SizedBox(width: 6),

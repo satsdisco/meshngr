@@ -174,6 +174,7 @@ class ChatProvider extends ChangeNotifier {
       signalStrength: snrBars,
       hopCount: dc.path.length,
       isOnline: isOnline,
+      advType: dc.advType,
     );
 
     if (fromRadioList) {
@@ -929,6 +930,32 @@ class ChatProvider extends ChangeNotifier {
     _channelConversations.clear();
     _channelConversations.addAll(Map.from(MockData.channelConversations));
     notifyListeners();
+  }
+
+  /// Count unique senders in a channel's conversation
+  int getChannelActiveMemberCount(String channelId) {
+    final msgs = _channelConversations[channelId];
+    if (msgs == null || msgs.isEmpty) return 0;
+    final senders = <String>{};
+    for (final m in msgs) {
+      if (!m.isMe && m.senderName != null && m.senderName!.isNotEmpty) {
+        senders.add(m.senderName!);
+      }
+    }
+    return senders.length;
+  }
+
+  /// Find a known node by sender name
+  Contact? findNodeBySenderName(String senderName) {
+    // Exact match first
+    for (final c in _knownNodes) {
+      if (c.name == senderName) return c;
+    }
+    // Try prefix match (sender names can be truncated)
+    for (final c in _knownNodes) {
+      if (c.name.startsWith(senderName) || senderName.startsWith(c.name)) return c;
+    }
+    return null;
   }
 
   void clearKnownNodes() {

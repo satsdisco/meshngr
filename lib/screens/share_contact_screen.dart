@@ -58,6 +58,7 @@ class ShareContactScreen extends StatelessWidget {
           return SingleChildScrollView(
             padding: const EdgeInsets.all(32),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const SizedBox(height: 20),
                 // Avatar

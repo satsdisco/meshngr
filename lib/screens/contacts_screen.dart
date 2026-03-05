@@ -113,7 +113,33 @@ class _ContactsScreenState extends State<ContactsScreen> {
                       : ListView(
                           padding: const EdgeInsets.only(bottom: 80),
                           children: [
-                            // MY CONTACTS section
+                            // MY CONTACTS section — show prompt when empty
+                            if (myFiltered.isEmpty) ...[
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                                child: Container(
+                                  padding: const EdgeInsets.all(20),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: AppColors.divider),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      const Icon(Icons.people_outline, size: 40, color: AppColors.textTertiary),
+                                      const SizedBox(height: 8),
+                                      const Text('No contacts yet', style: TextStyle(fontWeight: FontWeight.w500)),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Meet people in channels, scan their QR code, or tap a node below to save them.',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                             if (favorites.isNotEmpty) ...[
                               _SectionHeader(title: 'FAVORITES', count: favorites.length, icon: Icons.star_rounded, iconColor: AppColors.warning),
                               ...favorites.map((c) => _SwipeableContactRow(contact: c)),
@@ -127,70 +153,32 @@ class _ContactsScreenState extends State<ContactsScreen> {
                               ...myOffline.map((c) => _SwipeableContactRow(contact: c)),
                             ],
 
-                            // KNOWN NODES section (from radio)
+                            // KNOWN NODES — collapsed by default
                             if (hasKnownNodes) ...[
                               const SizedBox(height: 8),
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                                child: Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.accent.withValues(alpha: 0.06),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: AppColors.accent.withValues(alpha: 0.15)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.info_outline, size: 14, color: AppColors.accent.withValues(alpha: 0.7)),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          'Nodes from your radio. Tap to save as a contact.',
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                            color: AppColors.accent.withValues(alpha: 0.8),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                            if (knownOnline.isNotEmpty) ...[
-                              _SectionHeader(title: 'KNOWN NODES · ONLINE', count: knownOnline.length, icon: Icons.circle, iconColor: AppColors.online, iconSize: 8),
-                              ...knownOnline.map((c) => _SwipeableContactRow(contact: c, isKnownNode: true)),
-                            ],
-                            if (knownOffline.isNotEmpty) ...[
-                              Row(
-                                children: [
-                                  Expanded(child: _SectionHeader(title: 'KNOWN NODES', count: knownOffline.length)),
-                                  Padding(
-                                    padding: const EdgeInsets.only(right: 16),
-                                    child: TextButton.icon(
-                                      onPressed: () async {
-                                        final confirmed = await showDialog<bool>(
-                                          context: context,
-                                          builder: (ctx) => AlertDialog(
-                                            title: const Text('Clear Known Nodes?'),
-                                            content: const Text('Removes all known nodes. They\'ll repopulate as your radio hears them again.'),
-                                            actions: [
-                                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                                              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear')),
-                                            ],
-                                          ),
-                                        );
-                                        if (confirmed == true && context.mounted) {
-                                          context.read<ChatProvider>().clearKnownNodes();
-                                        }
-                                      },
-                                      icon: const Icon(Icons.refresh, size: 14),
-                                      label: const Text('Clear', style: TextStyle(fontSize: 12)),
-                                      style: TextButton.styleFrom(foregroundColor: AppColors.textTertiary),
+                              _CollapsibleNodesSection(
+                                totalCount: knownFiltered.length,
+                                repeaterCount: knownFiltered.where((c) => c.advType != 1).length,
+                                personCount: knownFiltered.where((c) => c.advType == 1).length,
+                                onlineNodes: knownOnline,
+                                offlineNodes: knownOffline,
+                                onClear: () async {
+                                  final confirmed = await showDialog<bool>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      title: const Text('Clear Known Nodes?'),
+                                      content: const Text('Removes all known nodes. They\'ll repopulate as your radio hears them again.'),
+                                      actions: [
+                                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                                        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear')),
+                                      ],
                                     ),
-                                  ),
-                                ],
+                                  );
+                                  if (confirmed == true && context.mounted) {
+                                    context.read<ChatProvider>().clearKnownNodes();
+                                  }
+                                },
                               ),
-                              ...knownOffline.map((c) => _SwipeableContactRow(contact: c, isKnownNode: true)),
                             ],
                           ],
                         ),
@@ -499,6 +487,213 @@ class _Dot extends StatelessWidget {
     return const Padding(
       padding: EdgeInsets.symmetric(horizontal: 6),
       child: Text('·', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+    );
+  }
+}
+
+class _CollapsibleNodesSection extends StatefulWidget {
+  final int totalCount;
+  final int repeaterCount;
+  final int personCount;
+  final List<Contact> onlineNodes;
+  final List<Contact> offlineNodes;
+  final VoidCallback onClear;
+
+  const _CollapsibleNodesSection({
+    required this.totalCount,
+    required this.repeaterCount,
+    required this.personCount,
+    required this.onlineNodes,
+    required this.offlineNodes,
+    required this.onClear,
+  });
+
+  @override
+  State<_CollapsibleNodesSection> createState() => _CollapsibleNodesSectionState();
+}
+
+class _CollapsibleNodesSectionState extends State<_CollapsibleNodesSection> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Collapsed summary bar
+        InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.divider),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.cell_tower, size: 18, color: AppColors.textSecondary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${widget.totalCount} nodes on your radio',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${widget.personCount} 👤 people · ${widget.repeaterCount} 📡 repeaters',
+                          style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_expanded)
+                    TextButton(
+                      onPressed: widget.onClear,
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.textTertiary,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      child: const Text('Clear', style: TextStyle(fontSize: 12)),
+                    ),
+                  Icon(
+                    _expanded ? Icons.expand_less : Icons.expand_more,
+                    color: AppColors.textTertiary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Expanded list
+        if (_expanded) ...[
+          if (widget.onlineNodes.isNotEmpty) ...[
+            _SectionHeader(title: 'ONLINE', count: widget.onlineNodes.length, icon: Icons.circle, iconColor: AppColors.online, iconSize: 8),
+            ...widget.onlineNodes.map((c) => _NodeRow(contact: c)),
+          ],
+          ...widget.offlineNodes.map((c) => _NodeRow(contact: c)),
+        ],
+      ],
+    );
+  }
+}
+
+class _NodeRow extends StatelessWidget {
+  final Contact contact;
+  const _NodeRow({required this.contact});
+
+  @override
+  Widget build(BuildContext context) {
+    final isRepeater = contact.advType != 1;
+    return ListTile(
+      dense: true,
+      leading: Stack(
+        children: [
+          ContactAvatar(contact: contact, size: 36, showOnlineIndicator: false),
+          if (isRepeater)
+            Positioned(
+              right: -2,
+              bottom: -2,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  shape: BoxShape.circle,
+                ),
+                child: const Text('📡', style: TextStyle(fontSize: 10)),
+              ),
+            ),
+        ],
+      ),
+      title: Text(contact.name, style: const TextStyle(fontSize: 14)),
+      subtitle: Text(
+        isRepeater ? 'Repeater' : contact.lastSeenText,
+        style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+      ),
+      onTap: () {
+        // Show contact detail or save option
+        showModalBottomSheet(
+          context: context,
+          backgroundColor: AppColors.surface,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+          builder: (ctx) => _NodeDetailSheet(contact: contact),
+        );
+      },
+    );
+  }
+}
+
+class _NodeDetailSheet extends StatelessWidget {
+  final Contact contact;
+  const _NodeDetailSheet({required this.contact});
+
+  @override
+  Widget build(BuildContext context) {
+    final isRepeater = contact.advType != 1;
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Stack(
+            children: [
+              ContactAvatar(contact: contact, size: 64, showOnlineIndicator: false),
+              if (isRepeater)
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(color: AppColors.surface, shape: BoxShape.circle),
+                    child: const Text('📡', style: TextStyle(fontSize: 14)),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(contact.name, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 4),
+          Text(
+            isRepeater ? 'Repeater / Infrastructure' : 'Companion Radio · ${contact.lastSeenText}',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              FilledButton.icon(
+                onPressed: () {
+                  final saved = contact.copyWith(trustLevel: TrustLevel.saved);
+                  context.read<ChatProvider>().addContact(saved, alias: contact.name);
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('${contact.name} saved to contacts')),
+                  );
+                },
+                icon: const Icon(Icons.person_add, size: 18),
+                label: const Text('Save Contact'),
+              ),
+              if (!isRepeater)
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    // Navigate to DM — for now just save and show message
+                    final saved = contact.copyWith(trustLevel: TrustLevel.saved);
+                    context.read<ChatProvider>().addContact(saved, alias: contact.name);
+                    Navigator.pushNamed(context, '/chat', arguments: saved);
+                  },
+                  icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                  label: const Text('Send DM'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
     );
   }
 }

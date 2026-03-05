@@ -5,6 +5,9 @@ import '../theme/app_theme.dart';
 import '../models/channel.dart';
 import '../models/message.dart';
 import '../providers/chat_provider.dart';
+import '../models/contact.dart';
+import '../widgets/contact_avatar.dart';
+import 'chat_detail_screen.dart';
 
 class ChannelChatScreen extends StatefulWidget {
   final Channel channel;
@@ -18,6 +21,77 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
   bool _showScrollToBottom = false;
+
+  void _showSenderProfile(BuildContext context, String senderName) {
+    final cp = context.read<ChatProvider>();
+    final node = cp.findNodeBySenderName(senderName);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ContactAvatar(contact: Contact(id: senderName, name: senderName, lastSeen: DateTime.now()), size: 64, showOnlineIndicator: false),
+            const SizedBox(height: 12),
+            Text(senderName, style: Theme.of(ctx).textTheme.titleLarge),
+            const SizedBox(height: 4),
+            Text(
+              node != null
+                  ? (node.advType == 1 ? 'Companion Radio · ${node.lastSeenText}' : 'Repeater / Infrastructure')
+                  : 'Seen in ${widget.channel.name}',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                FilledButton.icon(
+                  onPressed: () {
+                    if (node != null) {
+                      final saved = node.copyWith(trustLevel: TrustLevel.saved);
+                      cp.addContact(saved, alias: senderName);
+                    } else {
+                      cp.addContact(Contact(
+                        id: senderName,
+                        name: senderName,
+                        trustLevel: TrustLevel.saved,
+                        lastSeen: DateTime.now(),
+                      ), alias: senderName);
+                    }
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('$senderName saved to contacts')),
+                    );
+                  },
+                  icon: const Icon(Icons.person_add, size: 18),
+                  label: const Text('Save Contact'),
+                ),
+                if (node != null && node.advType == 1)
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      final saved = node.copyWith(trustLevel: TrustLevel.saved);
+                      cp.addContact(saved, alias: senderName);
+                      Navigator.pop(ctx);
+                      // Navigate to DM
+                      Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => ChatDetailScreen(contact: saved),
+                      ));
+                    },
+                    icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                    label: const Text('Send DM'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -177,7 +251,7 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
                 children: [
                   Text(widget.channel.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                   Text(
-                    '${widget.channel.memberCount} members',
+                    context.read<ChatProvider>().getChannelActiveMemberCount(widget.channel.id) > 0 ? '${context.read<ChatProvider>().getChannelActiveMemberCount(widget.channel.id)} active' : 'Channel',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 11),
                   ),
                 ],
@@ -217,7 +291,7 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
                           ),
                           const SizedBox(height: 20),
                           Text(
-                            'No messages in #${widget.channel.name}',
+                            'No messages in ${widget.channel.name}',
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary),
                           ),
                           const SizedBox(height: 8),
@@ -250,6 +324,7 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
                             message: msg,
                             showSender: showSender,
                             formatTime: _formatTime,
+                            onSenderTap: (name) => _showSenderProfile(context, name),
                           ),
                         );
                       },
@@ -298,7 +373,7 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
                       controller: _controller,
                       style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
                       decoration: InputDecoration(
-                        hintText: 'Message #${widget.channel.name}...',
+                        hintText: 'Message ${widget.channel.name}...',
                         hintStyle: const TextStyle(color: AppColors.textTertiary),
                         border: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(vertical: 10),
@@ -354,9 +429,9 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
               child: const Icon(Icons.tag, color: AppColors.accent, size: 30),
             ),
             const SizedBox(height: 16),
-            Text('#${widget.channel.name}', style: Theme.of(context).textTheme.headlineMedium),
+            Text(widget.channel.name, style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 4),
-            Text('${widget.channel.memberCount} members', style: Theme.of(context).textTheme.bodyMedium),
+            Text(context.read<ChatProvider>().getChannelActiveMemberCount(widget.channel.id) > 0 ? '${context.read<ChatProvider>().getChannelActiveMemberCount(widget.channel.id)} active' : 'Channel', style: Theme.of(context).textTheme.bodyMedium),
             const SizedBox(height: 20),
             Container(
               padding: const EdgeInsets.all(12),
@@ -388,11 +463,13 @@ class _ChannelBubble extends StatelessWidget {
   final Message message;
   final bool showSender;
   final String Function(DateTime) formatTime;
+  final void Function(String senderName)? onSenderTap;
 
   const _ChannelBubble({
     required this.message,
     required this.showSender,
     required this.formatTime,
+    this.onSenderTap,
   });
 
   @override
@@ -426,14 +503,17 @@ class _ChannelBubble extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      message.senderName ?? message.senderId,
-                      style: TextStyle(
-                        color: message.senderColor != null
-                            ? Color(message.senderColor!)
-                            : AppColors.accent,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                    GestureDetector(
+                      onTap: () => onSenderTap?.call(message.senderName ?? message.senderId),
+                      child: Text(
+                        message.senderName ?? message.senderId,
+                        style: TextStyle(
+                          color: message.senderColor != null
+                              ? Color(message.senderColor!)
+                              : AppColors.accent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     if (message.route != null && message.route!.hopCount > 0) ...[
