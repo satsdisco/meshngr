@@ -109,23 +109,9 @@ class _WelcomePage extends StatelessWidget {
       child: Column(
         children: [
           const Spacer(flex: 2),
-          Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(30),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.accent.withValues(alpha: 0.3),
-                  blurRadius: 30,
-                  spreadRadius: 5,
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(30),
-              child: Image.asset('assets/images/logo.png', fit: BoxFit.cover),
-            ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(30),
+            child: Image.asset('assets/images/logo.png', width: 120, height: 120, fit: BoxFit.cover),
           ),
           const SizedBox(height: 40),
           Text(
