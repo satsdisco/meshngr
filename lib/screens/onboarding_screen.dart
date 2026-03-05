@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
-import '../providers/connection_provider.dart' as conn;
+import '../core/ble_service.dart';
 import 'home_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -15,7 +16,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _pageController = PageController();
   int _currentPage = 0;
   final _nameController = TextEditingController(text: '');
-  bool _connectingRadio = false;
 
   @override
   void dispose() {
@@ -34,6 +34,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _finish() {
+    // Set name on radio if connected
+    final ble = context.read<BleService>();
+    final name = _nameController.text.trim();
+    if (name.isNotEmpty && ble.isConnected) {
+      ble.setName(name);
+    }
+
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const HomeScreen()),
     );
@@ -74,18 +81,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   _WelcomePage(onNext: _nextPage),
                   _ConnectPage(
                     onNext: _nextPage,
-                    isConnecting: _connectingRadio,
-                    onConnect: () async {
-                      setState(() => _connectingRadio = true);
-                      // Simulate connection
-                      final cp = context.read<conn.ConnectionProvider>();
-                      await cp.startScan();
-                      if (cp.discoveredDevices.isNotEmpty) {
-                        await cp.connect(cp.discoveredDevices.first);
-                      }
-                      setState(() => _connectingRadio = false);
-                      _nextPage();
-                    },
                     onSkip: _nextPage,
                   ),
                   _NamePage(
@@ -114,7 +109,6 @@ class _WelcomePage extends StatelessWidget {
       child: Column(
         children: [
           const Spacer(flex: 2),
-          // Logo area
           Container(
             width: 120,
             height: 120,
@@ -156,16 +150,12 @@ class _WelcomePage extends StatelessWidget {
                 ),
           ),
           const SizedBox(height: 32),
-
-          // Feature bullets
           _FeatureRow(icon: Icons.signal_cellular_alt, text: 'No internet, no cell towers needed'),
           const SizedBox(height: 14),
           _FeatureRow(icon: Icons.lock_outline, text: 'Encrypted, peer-to-peer messaging'),
           const SizedBox(height: 14),
           _FeatureRow(icon: Icons.people_outline, text: 'Find and message anyone on the mesh'),
-
           const Spacer(flex: 3),
-
           SizedBox(
             width: double.infinity,
             height: 54,
@@ -217,92 +207,161 @@ class _FeatureRow extends StatelessWidget {
   }
 }
 
-// Page 2: Connect radio
+// Page 2: Connect radio — REAL BLE scanning
 class _ConnectPage extends StatelessWidget {
   final VoidCallback onNext;
-  final VoidCallback onConnect;
   final VoidCallback onSkip;
-  final bool isConnecting;
 
   const _ConnectPage({
     required this.onNext,
-    required this.onConnect,
     required this.onSkip,
-    required this.isConnecting,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<conn.ConnectionProvider>(
-      builder: (context, cp, _) {
-        final isConnected = cp.isConnected;
+    return Consumer<BleService>(
+      builder: (context, ble, _) {
+        final isConnected = ble.isConnected;
+        final isScanning = ble.state == BleConnectionState.scanning;
+        final isConnecting = ble.state == BleConnectionState.connecting;
 
         return Padding(
           padding: const EdgeInsets.all(32),
           child: Column(
             children: [
-              const Spacer(flex: 2),
+              const Spacer(flex: 1),
 
-              // Radio icon with pulse animation
+              // Status icon
               Container(
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
                   color: isConnected
                       ? AppColors.success.withValues(alpha: 0.15)
-                      : AppColors.surfaceLight,
+                      : isScanning || isConnecting
+                          ? AppColors.accent.withValues(alpha: 0.15)
+                          : AppColors.surfaceLight,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  isConnected ? Icons.check_circle : Icons.bluetooth_searching,
-                  size: 48,
-                  color: isConnected ? AppColors.success : AppColors.accent,
-                ),
+                child: isScanning || isConnecting
+                    ? Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          SizedBox(
+                            width: 60,
+                            height: 60,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 3,
+                              color: AppColors.accent,
+                              backgroundColor: AppColors.surfaceLight,
+                            ),
+                          ),
+                          Icon(Icons.bluetooth_searching, size: 28, color: AppColors.accent),
+                        ],
+                      )
+                    : Icon(
+                        isConnected ? Icons.check_circle : Icons.bluetooth_searching,
+                        size: 48,
+                        color: isConnected ? AppColors.success : AppColors.accent,
+                      ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
               Text(
-                isConnected ? 'Radio Connected!' : 'Connect Your Radio',
+                isConnected
+                    ? 'Radio Connected!'
+                    : isScanning
+                        ? 'Scanning...'
+                        : isConnecting
+                            ? 'Connecting...'
+                            : 'Connect Your Radio',
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: 12),
               Text(
                 isConnected
-                    ? 'You\'re connected to ${cp.connectedDevice?.name ?? "your radio"}. You\'re ready to message.'
-                    : 'Turn on your MeshCore radio and make sure Bluetooth is enabled. We\'ll find it automatically.',
+                    ? 'Connected to ${ble.deviceName ?? "your radio"}. You\'re ready to message!'
+                    : isScanning
+                        ? 'Looking for MeshCore radios nearby...'
+                        : 'Turn on your MeshCore radio and make sure Bluetooth is enabled.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
               ),
 
-              if (!isConnected && !isConnecting) ...[
-                const SizedBox(height: 12),
-                // Show found devices
-                if (cp.discoveredDevices.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  ...cp.discoveredDevices.where((d) => d.isConnectable).map((device) =>
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.bluetooth, color: AppColors.accent, size: 20),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(device.name, style: Theme.of(context).textTheme.titleMedium),
-                          ),
-                          Text(device.signalLabel, style: Theme.of(context).textTheme.bodySmall),
-                        ],
-                      ),
+              // Real scan results
+              if (ble.scanResults.isNotEmpty && !isConnected) ...[
+                const SizedBox(height: 20),
+                ...ble.scanResults.map((result) {
+                  final name = result.device.platformName.isNotEmpty
+                      ? result.device.platformName
+                      : 'Unknown (${result.device.remoteId})';
+                  final connectable = result.advertisementData.connectable;
+                  final rssi = result.rssi;
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ),
-                ],
+                    child: Row(
+                      children: [
+                        Icon(Icons.bluetooth, color: connectable ? AppColors.accent : AppColors.textTertiary, size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(name, style: Theme.of(context).textTheme.titleSmall),
+                              Text('$rssi dBm', style: Theme.of(context).textTheme.bodySmall),
+                            ],
+                          ),
+                        ),
+                        if (connectable && !isConnecting)
+                          FilledButton(
+                            onPressed: () => ble.connect(result.device),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.accent,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                            ),
+                            child: const Text('Connect', style: TextStyle(fontSize: 13)),
+                          ),
+                      ],
+                    ),
+                  );
+                }),
               ],
 
-              const Spacer(flex: 3),
+              // No devices found after scan
+              if (!isScanning && !isConnecting && !isConnected && ble.scanResults.isEmpty) ...[
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.warning.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.warning.withValues(alpha: 0.15)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 16, color: AppColors.warning.withValues(alpha: 0.7)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Make sure your radio is powered on, Bluetooth is enabled on your phone, and you\'re nearby.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppColors.warning.withValues(alpha: 0.8),
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              const Spacer(flex: 2),
 
               if (isConnected)
                 SizedBox(
@@ -322,15 +381,19 @@ class _ConnectPage extends StatelessWidget {
                   width: double.infinity,
                   height: 54,
                   child: FilledButton.icon(
-                    onPressed: isConnecting ? null : onConnect,
-                    icon: isConnecting
+                    onPressed: isScanning || isConnecting ? null : () => ble.startScan(),
+                    icon: isScanning || isConnecting
                         ? const SizedBox(
                             width: 18, height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
                         : const Icon(Icons.bluetooth_searching),
                     label: Text(
-                      isConnecting ? 'Scanning...' : 'Scan for Radios',
+                      isScanning
+                          ? 'Scanning...'
+                          : isConnecting
+                              ? 'Connecting...'
+                              : 'Scan for Radios',
                       style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
                     ),
                     style: FilledButton.styleFrom(
@@ -342,8 +405,8 @@ class _ConnectPage extends StatelessWidget {
                 const SizedBox(height: 12),
                 TextButton(
                   onPressed: onSkip,
-                  child: Text(
-                    'Skip for now — I\'ll connect later',
+                  child: const Text(
+                    'Skip — I\'ll connect later in Settings',
                     style: TextStyle(color: AppColors.textTertiary, fontSize: 14),
                   ),
                 ),
@@ -365,104 +428,117 @@ class _NamePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        children: [
-          const Spacer(flex: 2),
+    return Consumer<BleService>(
+      builder: (context, ble, _) {
+        // Pre-fill with radio's current name if available
+        if (controller.text.isEmpty && ble.selfInfo?.name != null) {
+          controller.text = ble.selfInfo!.name;
+        }
 
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.person_outline, size: 48, color: AppColors.accent),
-          ),
-          const SizedBox(height: 32),
+        return Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            children: [
+              const Spacer(flex: 2),
 
-          Text(
-            'What should we call you?',
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'This is how other people on the mesh will see you. You can change it anytime.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
-          ),
-          const SizedBox(height: 32),
-
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.divider),
-            ),
-            child: TextField(
-              controller: controller,
-              autofocus: true,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 22,
-                fontWeight: FontWeight.w600,
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.person_outline, size: 48, color: AppColors.accent),
               ),
-              decoration: const InputDecoration(
-                hintText: 'Your name',
-                hintStyle: TextStyle(color: AppColors.textTertiary, fontWeight: FontWeight.w400),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(vertical: 18),
-              ),
-            ),
-          ),
+              const SizedBox(height: 32),
 
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.accent.withValues(alpha: 0.15)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.lightbulb_outline, size: 16, color: AppColors.accent.withValues(alpha: 0.7)),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Tip: Use a name your friends will recognize, not a handle or callsign.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.accent.withValues(alpha: 0.8),
-                          height: 1.4,
-                        ),
+              Text(
+                'What should we call you?',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                ble.isConnected
+                    ? 'This name will be set on your radio. Others on the mesh will see it.'
+                    : 'You can set this later when your radio is connected.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
+              ),
+              const SizedBox(height: 32),
+
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: TextField(
+                  controller: controller,
+                  autofocus: true,
+                  textAlign: TextAlign.center,
+                  maxLength: 20,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: const InputDecoration(
+                    hintText: 'Your name',
+                    hintStyle: TextStyle(color: AppColors.textTertiary, fontWeight: FontWeight.w400),
+                    border: InputBorder.none,
+                    counterText: '',
+                    contentPadding: EdgeInsets.symmetric(vertical: 18),
                   ),
                 ),
-              ],
-            ),
-          ),
-
-          const Spacer(flex: 3),
-
-          SizedBox(
-            width: double.infinity,
-            height: 54,
-            child: FilledButton(
-              onPressed: onFinish,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.accent,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
-              child: const Text(
-                'Start Messaging',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.accent.withValues(alpha: 0.15)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.lightbulb_outline, size: 16, color: AppColors.accent.withValues(alpha: 0.7)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Tip: Use a name your friends will recognize, not a handle or callsign.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppColors.accent.withValues(alpha: 0.8),
+                              height: 1.4,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+
+              const Spacer(flex: 3),
+
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: FilledButton(
+                  onPressed: onFinish,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.accent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text(
+                    'Start Messaging',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'theme/app_theme.dart';
 import 'core/ble_service.dart';
 import 'providers/chat_provider.dart';
-import 'providers/connection_provider.dart';
 import 'screens/onboarding_screen.dart';
 
 void main() async {
@@ -40,7 +39,6 @@ class MeshngrApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider.value(value: bleService),
         ChangeNotifierProvider.value(value: chatProvider),
-        ChangeNotifierProvider(create: (_) => ConnectionProvider()),
       ],
       child: MaterialApp(
         title: 'meshngr',
