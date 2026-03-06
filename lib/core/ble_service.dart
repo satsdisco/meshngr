@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'protocol.dart';
+import 'foreground_service.dart';
 
 enum BleConnectionState { disconnected, scanning, connecting, connected }
 
@@ -164,6 +165,8 @@ class BleService extends ChangeNotifier {
       _notifySub = _txChar!.onValueReceived.listen(_onDataReceived);
 
       _setState(BleConnectionState.connected);
+      // Start foreground service to keep BLE alive
+      MeshForegroundService.start(radioName: _deviceName ?? 'radio');
       // Save last connected device for auto-reconnect
       SharedPreferences.getInstance().then((prefs) {
         prefs.setString('last_device_id', device.remoteId.str);
@@ -218,6 +221,7 @@ class BleService extends ChangeNotifier {
     _cancelReconnect();
     await _cleanup();
     _setState(BleConnectionState.disconnected);
+    MeshForegroundService.stop();
   }
 
   /// Send a raw frame to the radio

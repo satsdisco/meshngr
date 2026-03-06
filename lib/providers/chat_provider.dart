@@ -8,6 +8,7 @@ import '../data/mock_data.dart';
 import '../data/database.dart';
 import '../core/ble_service.dart';
 import '../core/protocol.dart';
+import '../core/notification_service.dart';
 
 class ChatProvider extends ChangeNotifier {
   final BleService _ble;
@@ -240,6 +241,13 @@ class ChatProvider extends ChangeNotifier {
     _conversations[conversationId]!.add(msg);
     notifyListeners();
     _db.then((db) => db.upsertMessage(msg, contactId: conversationId));
+
+    // Fire notification
+    NotificationService().showDmNotification(
+      senderName: contact.displayName,
+      text: im.text,
+      contactId: conversationId,
+    );
   }
 
   void _handleIncomingChannelMsg(IncomingChannelMessage cm) {
@@ -290,6 +298,17 @@ class ChatProvider extends ChangeNotifier {
     }
     notifyListeners();
     _db.then((db) => db.upsertMessage(msg, channelId: channelId));
+
+    // Fire notification (skip muted channels)
+    final ch = chIdx != -1 ? _channels[chIdx] : null;
+    if (ch != null && !ch.isMuted) {
+      NotificationService().showChannelNotification(
+        channelName: ch.name,
+        senderName: cm.senderName,
+        text: cm.text,
+        channelId: channelId,
+      );
+    }
   }
 
   void _handleChannelInfo(DeviceChannel dc) {

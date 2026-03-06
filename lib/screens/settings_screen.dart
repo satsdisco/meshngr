@@ -7,6 +7,7 @@ import '../widgets/connection_status.dart';
 import 'connection_screen.dart';
 import 'broadcast_screen.dart';
 import 'ble_debug_screen.dart';
+import '../core/notification_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -16,7 +17,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _notificationsEnabled = true;
+  bool _notificationsEnabled = NotificationService().enabled;
 
   String _statusText(BleService ble) {
     switch (ble.state) {
@@ -180,7 +181,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: _notificationsEnabled ? 'Enabled' : 'Disabled',
                 trailing: Switch(
                   value: _notificationsEnabled,
-                  onChanged: (val) => setState(() => _notificationsEnabled = val),
+                  onChanged: (val) => setState(() {
+                    _notificationsEnabled = val;
+                    NotificationService().enabled = val;
+                  }),
                   activeColor: AppColors.accent,
                 ),
               ),

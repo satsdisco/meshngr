@@ -42,6 +42,8 @@ dependencies:
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.2.0
   shared_preferences: ^2.5.4
+  flutter_local_notifications: ^21.0.0
+  flutter_foreground_task: ^9.2.1
 
 dev_dependencies:
   flutter_test:

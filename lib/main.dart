@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'theme/app_theme.dart';
 import 'core/ble_service.dart';
+import 'core/notification_service.dart';
+import 'core/foreground_service.dart';
 import 'providers/chat_provider.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/home_screen.dart';
@@ -17,6 +19,10 @@ void main() async {
       statusBarIconBrightness: Brightness.light,
     ),
   );
+
+  // Init notifications + foreground service
+  await NotificationService().initialize();
+  await MeshForegroundService.init();
 
   final prefs = await SharedPreferences.getInstance();
   final onboardingDone = prefs.getBool('onboarding_complete') ?? false;
