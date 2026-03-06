@@ -13,6 +13,7 @@ import 'add_channel_screen.dart';
 import 'share_contact_screen.dart';
 import 'add_contact_screen.dart';
 import 'qr_scan_screen.dart';
+import 'map_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -120,6 +121,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const ShareContactScreen()),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.map_outlined, size: 22),
+            tooltip: 'Mesh Map',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MapScreen()),
             ),
           ),
           IconButton(

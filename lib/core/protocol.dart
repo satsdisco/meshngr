@@ -269,6 +269,8 @@ class DeviceContact {
   final double? lastSNR;
   final int? lastSeen; // epoch seconds
   final String name;
+  final double? latitude;
+  final double? longitude;
   final bool isOutgoing; // we added them (not them us)
 
   DeviceContact({
@@ -280,6 +282,8 @@ class DeviceContact {
     this.lastSNR,
     this.lastSeen,
     required this.name,
+    this.latitude,
+    this.longitude,
     this.isOutgoing = false,
   });
 }
@@ -327,11 +331,15 @@ class DeviceSelfInfo {
   final Uint8List publicKey;
   final String publicKeyHex;
   final String name;
+  final double? latitude;
+  final double? longitude;
 
   DeviceSelfInfo({
     required this.publicKey,
     required this.publicKeyHex,
     required this.name,
+    this.latitude,
+    this.longitude,
   });
 }
 
@@ -445,9 +453,17 @@ ParsedFrame _parseSelfInfo(BufferReader r, int code) {
   final maxTxPower = r.readUInt8();
   final pubKey = r.readBytes(pubKeySize);
 
-  // Skip lat(4) + lon(4) + multi_acks(1) + advert_loc(1) + telemetry(1) + manual_add(1)
+  // Parse lat(4) + lon(4) + skip multi_acks(1) + advert_loc(1) + telemetry(1) + manual_add(1)
+  double? lat;
+  double? lon;
   if (r.remaining >= 12) {
-    r.readBytes(12); // lat + lon + 4 flag bytes
+    final latRaw = r.readInt32LE();
+    final lonRaw = r.readInt32LE();
+    if (latRaw != 0 || lonRaw != 0) {
+      lat = latRaw / 1e6;
+      lon = lonRaw / 1e6;
+    }
+    r.readBytes(4); // 4 flag bytes
   }
   // Skip freq(4) + bw(4) + sf(1) + cr(1)
   if (r.remaining >= 10) {
@@ -459,6 +475,8 @@ ParsedFrame _parseSelfInfo(BufferReader r, int code) {
     publicKey: pubKey,
     publicKeyHex: _bytesToHex(pubKey),
     name: name,
+    latitude: lat,
+    longitude: lon,
   ));
 }
 
@@ -506,6 +524,21 @@ ParsedFrame _parseContact(BufferReader r, int code) {
     if (lastSeen == 0) lastSeen = null;
   }
 
+  // Lat/Lon at offsets 135-142 (int32 LE, divide by 1e6 for degrees)
+  double? latitude;
+  double? longitude;
+  if (data.length >= 143) {
+    final latRaw = data[135] | (data[136] << 8) | (data[137] << 16) | (data[138] << 24);
+    final lonRaw = data[139] | (data[140] << 8) | (data[141] << 16) | (data[142] << 24);
+    // Signed int32
+    final latSigned = latRaw > 0x7FFFFFFF ? latRaw - 0x100000000 : latRaw;
+    final lonSigned = lonRaw > 0x7FFFFFFF ? lonRaw - 0x100000000 : lonRaw;
+    if (latSigned != 0 || lonSigned != 0) {
+      latitude = latSigned / 1e6;
+      longitude = lonSigned / 1e6;
+    }
+  }
+
   // SNR: derive from path data or use a default
   double? snr;
   // Some firmware encodes last SNR in the path bytes after the actual path
@@ -522,6 +555,8 @@ ParsedFrame _parseContact(BufferReader r, int code) {
     lastSNR: snr,
     lastSeen: lastSeen,
     name: name,
+    latitude: latitude,
+    longitude: longitude,
   ));
 }
 

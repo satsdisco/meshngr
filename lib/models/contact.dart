@@ -11,6 +11,10 @@ class Contact {
   final int hopCount;
   final bool isOnline;
   final int advType; // 1 = companion radio (person), other = repeater/infra
+  final double? latitude;
+  final double? longitude;
+
+  bool get hasLocation => latitude != null && longitude != null && (latitude != 0 || longitude != 0);
 
   const Contact({
     required this.id,
@@ -23,6 +27,8 @@ class Contact {
     this.hopCount = 0,
     this.isOnline = false,
     this.advType = 1,
+    this.latitude,
+    this.longitude,
   });
 
   String get displayName => alias ?? name;
@@ -57,6 +63,8 @@ class Contact {
     int? hopCount,
     bool? isOnline,
     int? advType,
+    double? latitude,
+    double? longitude,
   }) {
     return Contact(
       id: id,
@@ -69,6 +77,8 @@ class Contact {
       hopCount: hopCount ?? this.hopCount,
       isOnline: isOnline ?? this.isOnline,
       advType: advType ?? this.advType,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
     );
   }
 }

@@ -177,6 +177,8 @@ class ChatProvider extends ChangeNotifier {
       hopCount: dc.path.length,
       isOnline: isOnline,
       advType: dc.advType,
+      latitude: dc.latitude,
+      longitude: dc.longitude,
     );
 
     if (fromRadioList) {
