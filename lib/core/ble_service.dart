@@ -44,7 +44,7 @@ class BleService extends ChangeNotifier {
   BleConnectionState get state => _state;
   String? get deviceName => _selfInfo?.name ?? _deviceName;
   String? get deviceId => _deviceId;
-  String? get connectedDeviceId => _device?.remoteId.str;
+  String? get connectedDeviceId => _device?.remoteId.str ?? _lastDeviceId;
   bool get isConnected => _state == BleConnectionState.connected;
   List<ScanResult> get scanResults => _scanResults;
   Stream<ParsedFrame> get frames => _frameController.stream;
@@ -53,16 +53,34 @@ class BleService extends ChangeNotifier {
 
   /// Auto-reconnect to a previously connected device by ID
   Future<void> autoReconnect(String deviceId) async {
+    if (_state == BleConnectionState.connecting || _state == BleConnectionState.connected) return;
     _log('Auto-reconnect to $deviceId');
+    _lastDeviceId = deviceId;
     try {
       final device = BluetoothDevice.fromId(deviceId);
       await connect(device);
+      // Verify connection actually works — wait for selfInfo
+      await Future.delayed(const Duration(seconds: 5));
+      if (_selfInfo == null && _state == BleConnectionState.connected) {
+        _log('Auto-reconnect: connected but no selfInfo — retrying');
+        await disconnect();
+        await Future.delayed(const Duration(seconds: 2));
+        final device2 = BluetoothDevice.fromId(deviceId);
+        await connect(device2);
+      }
     } catch (e) {
-      _log('Auto-reconnect failed: $e — will retry via scan');
-      // Fall back to scanning
-      Future.delayed(const Duration(seconds: 2), () => startScan());
+      _log('Auto-reconnect failed: $e — will retry in 5s');
+      _setState(BleConnectionState.disconnected);
+      _reconnectTimer?.cancel();
+      _reconnectTimer = Timer(const Duration(seconds: 5), () {
+        if (_state == BleConnectionState.disconnected && !_manualDisconnect) {
+          autoReconnect(deviceId);
+        }
+      });
     }
   }
+
+  String? _lastDeviceId;
 
   /// Start scanning for MeshCore radios
   Future<void> startScan({Duration timeout = const Duration(seconds: 10)}) async {
@@ -117,6 +135,7 @@ class BleService extends ChangeNotifier {
     _setState(BleConnectionState.connecting);
     _device = device;
     _deviceId = device.remoteId.toString();
+    _lastDeviceId = device.remoteId.str;
     _deviceName = device.platformName.isNotEmpty ? device.platformName : 'MeshCore Radio';
     _manualDisconnect = false;
     _cancelReconnect();
@@ -381,11 +400,14 @@ class BleService extends ChangeNotifier {
     _cleanup();
     _setState(BleConnectionState.disconnected);
 
+    // Stop foreground service
+    MeshForegroundService.stop();
+
     // Auto-reconnect after 3 seconds (unless manual disconnect)
-    if (!_manualDisconnect) {
+    if (!_manualDisconnect && _lastDeviceId != null) {
       _reconnectTimer = Timer(const Duration(seconds: 3), () {
-        _log('RECONNECTING...');
-        reconnect();
+        _log('RECONNECTING to $_lastDeviceId...');
+        autoReconnect(_lastDeviceId!);
       });
     }
   }

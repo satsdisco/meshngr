@@ -14,6 +14,7 @@ import 'share_contact_screen.dart';
 import 'add_contact_screen.dart';
 import 'qr_scan_screen.dart';
 import 'map_screen.dart';
+import 'connection_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -148,12 +149,69 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: const [
-          ChatsScreen(),
-          ChannelsScreen(),
-          ContactsScreen(),
+      body: Column(
+        children: [
+          // Connection banner
+          Consumer<BleService>(
+            builder: (context, ble, _) {
+              if (ble.isConnected) return const SizedBox.shrink();
+              final isReconnecting = ble.state == BleConnectionState.connecting || ble.state == BleConnectionState.scanning;
+              return GestureDetector(
+                onTap: () {
+                  if (!isReconnecting) {
+                    // Try reconnect or go to connection screen
+                    final lastId = ble.connectedDeviceId;
+                    if (lastId != null) {
+                      ble.autoReconnect(lastId);
+                    } else {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => ConnectionScreen()));
+                    }
+                  }
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  color: isReconnecting
+                      ? AppColors.accent.withValues(alpha: 0.15)
+                      : AppColors.error.withValues(alpha: 0.15),
+                  child: Row(
+                    children: [
+                      if (isReconnecting) ...[
+                        const SizedBox(
+                          width: 14, height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text('Reconnecting to radio...', style: TextStyle(fontSize: 13, color: AppColors.accent)),
+                        ),
+                      ] else ...[
+                        Icon(Icons.bluetooth_disabled, size: 16, color: AppColors.error.withValues(alpha: 0.8)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Radio disconnected. Tap to reconnect.',
+                            style: TextStyle(fontSize: 13, color: AppColors.error.withValues(alpha: 0.9)),
+                          ),
+                        ),
+                        Icon(Icons.chevron_right, size: 18, color: AppColors.error.withValues(alpha: 0.5)),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: const [
+                ChatsScreen(),
+                ChannelsScreen(),
+                ContactsScreen(),
+              ],
+            ),
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
