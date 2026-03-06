@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import '../core/ble_service.dart';
 import 'home_screen.dart';
@@ -33,7 +34,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  void _finish() {
+  void _finish() async {
     // Set name on radio if connected
     final ble = context.read<BleService>();
     final name = _nameController.text.trim();
@@ -41,9 +42,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ble.setName(name);
     }
 
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
-    );
+    // Save onboarding complete + last device
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('onboarding_complete', true);
+    if (ble.connectedDeviceId != null) {
+      await prefs.setString('last_device_id', ble.connectedDeviceId!);
+    }
+
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    }
   }
 
   @override

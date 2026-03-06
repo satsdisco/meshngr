@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'protocol.dart';
 
 enum BleConnectionState { disconnected, scanning, connecting, connected }
@@ -42,11 +43,25 @@ class BleService extends ChangeNotifier {
   BleConnectionState get state => _state;
   String? get deviceName => _selfInfo?.name ?? _deviceName;
   String? get deviceId => _deviceId;
+  String? get connectedDeviceId => _device?.remoteId.str;
   bool get isConnected => _state == BleConnectionState.connected;
   List<ScanResult> get scanResults => _scanResults;
   Stream<ParsedFrame> get frames => _frameController.stream;
   DeviceSelfInfo? get selfInfo => _selfInfo;
   int? get batteryPercent => _battInfo?.batteryPercent;
+
+  /// Auto-reconnect to a previously connected device by ID
+  Future<void> autoReconnect(String deviceId) async {
+    _log('Auto-reconnect to $deviceId');
+    try {
+      final device = BluetoothDevice.fromId(deviceId);
+      await connect(device);
+    } catch (e) {
+      _log('Auto-reconnect failed: $e — will retry via scan');
+      // Fall back to scanning
+      Future.delayed(const Duration(seconds: 2), () => startScan());
+    }
+  }
 
   /// Start scanning for MeshCore radios
   Future<void> startScan({Duration timeout = const Duration(seconds: 10)}) async {
@@ -149,6 +164,10 @@ class BleService extends ChangeNotifier {
       _notifySub = _txChar!.onValueReceived.listen(_onDataReceived);
 
       _setState(BleConnectionState.connected);
+      // Save last connected device for auto-reconnect
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setString('last_device_id', device.remoteId.str);
+      });
       _log('Connected! RX props: write=${_rxChar!.properties.write} writeNoResp=${_rxChar!.properties.writeWithoutResponse}');
       _log('TX props: notify=${_txChar!.properties.notify} indicate=${_txChar!.properties.indicate}');
 
