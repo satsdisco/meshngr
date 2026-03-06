@@ -167,6 +167,15 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
                 );
               },
             ),
+            if (msg.isMe && msg.status == DeliveryStatus.failed)
+              ListTile(
+                leading: Icon(Icons.refresh, color: AppColors.accent),
+                title: const Text('Retry'),
+                onTap: () {
+                  Navigator.pop(context);
+                  context.read<ChatProvider>().retryChannelMessage(widget.channel.id, msg.id);
+                },
+              ),
             if (msg.isMe)
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: AppColors.error),
@@ -218,11 +227,24 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
             const SizedBox(height: 16),
             _InfoRow(label: 'From', value: msg.senderName ?? (msg.isMe ? 'You' : 'Unknown')),
             _InfoRow(label: 'Time', value: '${msg.timestamp.day}/${msg.timestamp.month}/${msg.timestamp.year} ${_formatTime(msg.timestamp)}'),
+            if (msg.isMe) ...[
+              _InfoRow(
+                label: 'Status',
+                value: _statusLabel(msg.status),
+                valueColor: _statusColor(msg.status),
+              ),
+            ],
             if (msg.route != null) ...[
-              _InfoRow(label: 'Hops', value: '${msg.route!.hopCount}'),
+              _InfoRow(label: 'Hops', value: msg.route!.hopCount == 1 ? '1 hop (direct)' : '${msg.route!.hopCount} hops'),
               if (msg.route!.rssi != null)
                 _InfoRow(label: 'Signal', value: '${msg.route!.rssi} dBm'),
+              if (msg.route!.path.isNotEmpty)
+                _InfoRow(label: 'Path', value: msg.route!.path.join(' → ')),
             ],
+            if (msg.retryCount > 0)
+              _InfoRow(label: 'Retries', value: '${msg.retryCount}'),
+            if (msg.failReason != null)
+              _InfoRow(label: 'Error', value: msg.failReason!, valueColor: AppColors.error),
           ],
         ),
       ),
@@ -615,10 +637,33 @@ Widget _deliveryIcon(DeliveryStatus status) {
   }
 }
 
+String _statusLabel(DeliveryStatus s) {
+  switch (s) {
+    case DeliveryStatus.pending: return 'Sending...';
+    case DeliveryStatus.sent: return 'Sent to mesh';
+    case DeliveryStatus.delivered: return 'Delivered';
+    case DeliveryStatus.read: return 'Read';
+    case DeliveryStatus.failed: return 'Failed';
+  }
+}
+
+Color _statusColor(DeliveryStatus s) {
+  switch (s) {
+    case DeliveryStatus.delivered:
+    case DeliveryStatus.read:
+      return AppColors.success;
+    case DeliveryStatus.failed:
+      return AppColors.error;
+    default:
+      return AppColors.textSecondary;
+  }
+}
+
 class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
-  const _InfoRow({required this.label, required this.value});
+  final Color? valueColor;
+  const _InfoRow({required this.label, required this.value, this.valueColor});
 
   @override
   Widget build(BuildContext context) {
@@ -631,7 +676,7 @@ class _InfoRow extends StatelessWidget {
             child: Text(label, style: Theme.of(context).textTheme.bodySmall),
           ),
           Expanded(
-            child: Text(value, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textPrimary)),
+            child: Text(value, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: valueColor ?? AppColors.textPrimary)),
           ),
         ],
       ),
