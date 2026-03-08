@@ -1,0 +1,46 @@
+# meshngr — Zapstore publishing config
+# Publish: SIGN_WITH=browser zsp publish
+
+repository: https://github.com/satsdisco/meshngr
+
+name: meshngr
+summary: Clean mesh messenger for MeshCore LoRa radios
+
+description: |
+  A cross-platform mesh messaging app for MeshCore LoRa radios via Bluetooth.
+
+  Built for real people, not just radio nerds. meshngr connects to your MeshCore
+  companion radio over BLE and gives you a clean, Telegram-style messaging experience
+  over the mesh network — no internet, no servers, no SIM card.
+
+  Features:
+  - Direct messages and group channels over LoRa mesh
+  - Contact management with QR code sharing
+  - Mesh map — see all GPS-enabled nodes on a dark map
+  - Background connection with foreground service
+  - Notifications for incoming messages
+  - Auto-reconnect to your radio
+  - Full MeshCore protocol support
+
+  Privacy-first. No accounts. No cloud. No tracking.
+  Your messages travel radio-to-radio through the mesh.
+
+tags:
+  - mesh
+  - meshcore
+  - lora
+  - messaging
+  - ble
+  - bluetooth
+  - radio
+  - off-grid
+  - privacy
+  - communication
+
+license: MIT
+website: https://github.com/satsdisco/meshngr
+
+icon: ./assets/images/logo.png
+
+metadata_sources:
+  - github
